@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3a266b0af7194a498c826f8c67b0b6a, type: 3}
+  m_Name: Palewheat
+  m_EditorClassIdentifier: 
+  id: palewheat
+  displayName: Palewheat
+  stageSprites:
+  - {fileID: -4709605664841142755, guid: fdb65a5bb04d9fc47a09bb073e173068, type: 3}
+  - {fileID: -1853581204350420577, guid: a0131da773752d44ab5bc4a1ebd66628, type: 3}
+  - {fileID: -3793594056915005474, guid: 77a34d9d741d09441bb4f82ac481f8f5, type: 3}
+  hoursPerStage: 6
+  requiredSurface: 1
+  produceId: wheat
+  produceAmount: 2
+  tint: {r: 1, g: 1, b: 1, a: 1}

@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1cdbe103791336488c0ad80ce7f8ac6, type: 3}
+  m_Name: chain_meadow_visitor
+  m_EditorClassIdentifier: 
+  chainId: meadow_visitor
+  appear: {fileID: 11400000, guid: 345f6e375ba132449b252905c6220ba1, type: 2}
+  visit: {fileID: 11400000, guid: 082f9ee186b69034bb3c2eb133b0ea63, type: 2}
+  resident: {fileID: 11400000, guid: 74b4a93fef0be5c43a263cf7e0b7ddaf, type: 2}
+  fulfil: {fileID: 11400000, guid: 22f7fa1b7ef7dfb4c89356bde97b3621, type: 2}

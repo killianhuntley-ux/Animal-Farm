@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cad989e576e29fd4682661ebc6669537, type: 3}
+  m_Name: Skin_Alt
+  m_EditorClassIdentifier: 
+  body: {fileID: 1667515929090145431, guid: 90302af0e0e5b644ca1ad444da282747, type: 3}
+  head: {fileID: -4200838185106457672, guid: 6824ac9130cda374f9abc0d933ea19c8, type: 3}
+  tint: {r: 1, g: 1, b: 1, a: 1}
