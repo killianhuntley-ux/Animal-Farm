@@ -27,7 +27,7 @@ namespace AnimalFarm.UI
             holder.anchoredPosition = new Vector2(24f, 20f);
             holder.sizeDelta = new Vector2(640f, 34f);
 
-            var nearWhite = new Color(0.95f, 0.95f, 0.92f, 1f);
+            var nearWhite = UIStyle.Cream;
 
             _text = UIRoot.MakeText(holder, "ToolText", 26, TextAnchor.LowerLeft, nearWhite);
             var rt = _text.rectTransform;

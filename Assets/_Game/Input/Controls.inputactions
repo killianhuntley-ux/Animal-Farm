@@ -13,7 +13,10 @@
                 { "name": "Pause", "type": "Button", "id": "a1b2c3d4-0007-4000-9000-000000000007", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
                 { "name": "Console", "type": "Button", "id": "a1b2c3d4-0008-4000-9000-000000000008", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
                 { "name": "UseTool", "type": "Button", "id": "a1b2c3d4-0009-4000-9000-000000000009", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": true },
-                { "name": "CycleTool", "type": "Button", "id": "a1b2c3d4-000a-4000-9000-00000000000a", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
+                { "name": "CycleTool", "type": "Button", "id": "a1b2c3d4-000a-4000-9000-00000000000a", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+                { "name": "Toolbelt", "type": "Button", "id": "a1b2c3d4-000b-4000-9000-00000000000b", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+                { "name": "Inspect", "type": "Button", "id": "a1b2c3d4-000c-4000-9000-00000000000c", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+                { "name": "Build", "type": "Button", "id": "a1b2c3d4-000d-4000-9000-00000000000d", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
             ],
             "bindings": [
                 { "name": "WASD", "id": "b1000000-0001-4000-9000-000000000001", "path": "2DVector", "interactions": "", "processors": "", "groups": "", "action": "Move", "isComposite": true, "isPartOfComposite": false },
@@ -36,7 +39,7 @@
                 { "name": "Shoulders", "id": "b4000000-0002-4000-9000-000000000002", "path": "1DAxis", "interactions": "", "processors": "", "groups": "", "action": "Zoom", "isComposite": true, "isPartOfComposite": false },
                 { "name": "negative", "id": "b4000000-0003-4000-9000-000000000003", "path": "<Gamepad>/leftShoulder", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Zoom", "isComposite": false, "isPartOfComposite": true },
                 { "name": "positive", "id": "b4000000-0004-4000-9000-000000000004", "path": "<Gamepad>/rightShoulder", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Zoom", "isComposite": false, "isPartOfComposite": true },
-                { "name": "", "id": "b5000000-0001-4000-9000-000000000001", "path": "<Keyboard>/t", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "FastForward", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "b5000000-0001-4000-9000-000000000001", "path": "<Keyboard>/f", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "FastForward", "isComposite": false, "isPartOfComposite": false },
                 { "name": "", "id": "b5000000-0002-4000-9000-000000000002", "path": "<Gamepad>/select", "interactions": "", "processors": "", "groups": "Gamepad", "action": "FastForward", "isComposite": false, "isPartOfComposite": false },
                 { "name": "", "id": "b6000000-0001-4000-9000-000000000001", "path": "<Keyboard>/escape", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Pause", "isComposite": false, "isPartOfComposite": false },
                 { "name": "", "id": "b6000000-0002-4000-9000-000000000002", "path": "<Gamepad>/start", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Pause", "isComposite": false, "isPartOfComposite": false },
@@ -45,7 +48,12 @@
                 { "name": "", "id": "b8000000-0002-4000-9000-000000000002", "path": "<Mouse>/leftButton", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "UseTool", "isComposite": false, "isPartOfComposite": false },
                 { "name": "", "id": "b8000000-0003-4000-9000-000000000003", "path": "<Gamepad>/rightTrigger", "interactions": "", "processors": "", "groups": "Gamepad", "action": "UseTool", "isComposite": false, "isPartOfComposite": false },
                 { "name": "", "id": "b9000000-0001-4000-9000-000000000001", "path": "<Keyboard>/tab", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "CycleTool", "isComposite": false, "isPartOfComposite": false },
-                { "name": "", "id": "b9000000-0002-4000-9000-000000000002", "path": "<Gamepad>/buttonNorth", "interactions": "", "processors": "", "groups": "Gamepad", "action": "CycleTool", "isComposite": false, "isPartOfComposite": false }
+                { "name": "", "id": "b9000000-0002-4000-9000-000000000002", "path": "<Gamepad>/buttonNorth", "interactions": "", "processors": "", "groups": "Gamepad", "action": "CycleTool", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "ba000000-0001-4000-9000-000000000001", "path": "<Keyboard>/t", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Toolbelt", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "bb000000-0001-4000-9000-000000000001", "path": "<Keyboard>/r", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Inspect", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "bb000000-0002-4000-9000-000000000002", "path": "<Gamepad>/rightStickPress", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Inspect", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "bc000000-0001-4000-9000-000000000001", "path": "<Keyboard>/b", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Build", "isComposite": false, "isPartOfComposite": false },
+                { "name": "", "id": "bc000000-0002-4000-9000-000000000002", "path": "<Gamepad>/leftStickPress", "interactions": "", "processors": "", "groups": "Gamepad", "action": "Build", "isComposite": false, "isPartOfComposite": false }
             ]
         }
     ],

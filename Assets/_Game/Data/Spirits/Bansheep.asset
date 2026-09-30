@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41bbfc940441f5d4295536dabdea50f4, type: 3}
+  m_Name: Bansheep
+  m_EditorClassIdentifier: 
+  id: bansheep
+  displayName: Bansheep
+  flavor: It wails at shearing time. Nobody has ever sheared it.
+  bodySprite: {fileID: 9176093543944883116, guid: a77ffdcdf8ea01e4eb33f807e9023e03, type: 3}
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  gateChain: {fileID: 11400000, guid: 3780efb8eb36206448af53fcf5256711, type: 2}
+  favoredFoodId: wheat
+  residencyFoodCount: 2
+  maxResidents: 2
+  activity: 1
+  wanderSpeed: 1.6
+  hungerHours: 12
+  spiritDecayPerHungryHour: 8
+  feedSpiritBoost: 15
+  sootheSpiritBoost: 8
+  runawayThreshold: 15
+  homeSprite: {fileID: -8548974770991917881, guid: d0ed92afdc917d748845655328285cfc, type: 3}
+  taskKind: 0
+  taskItemId: bloom
+  taskItemCount: 3
+  taskRadius: 3
+  taskWindowStartHour: 0
+  taskWindowEndHour: 1
+  taskDescription: Flowers for its own funeral. It insists on attending.
+  taskHint: (it wants gravebloom blossoms - three, for symmetry)

@@ -19,7 +19,7 @@ namespace AnimalFarm.UI
             var root = UIRoot.GetRoot();
 
             _prompt = UIRoot.MakeText(root, "InteractPrompt", 28, TextAnchor.MiddleCenter,
-                new Color(0.95f, 0.95f, 0.92f, 1f));
+                UIStyle.Cream);
 
             var rt = _prompt.rectTransform;
             rt.anchorMin = new Vector2(0.5f, 0f);

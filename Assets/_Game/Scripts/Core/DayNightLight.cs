@@ -51,7 +51,7 @@ namespace AnimalFarm.Core
         {
             // #1B2340 midnight deep blue → warm peach dawn → near-white noon →
             // orange dusk → back to midnight blue.
-            Color midnight = new Color(0x1B / 255f, 0x23 / 255f, 0x40 / 255f);
+            Color midnight = new Color(0x3A / 255f, 0x42 / 255f, 0x60 / 255f); // lightened for readability
             Color dawn = new Color(1.00f, 0.78f, 0.63f); // warm peach
             Color noon = new Color(1.00f, 0.98f, 0.94f); // near-white
             Color dusk = new Color(1.00f, 0.60f, 0.35f); // orange
@@ -76,12 +76,14 @@ namespace AnimalFarm.Core
 
         private static AnimationCurve DefaultIntensityCurve()
         {
+            // Night floor raised 0.35 -> 0.6 for greybox readability (playtest:
+            // the field was near-illegible at midnight).
             var curve = new AnimationCurve(
-                new Keyframe(0.00f, 0.35f),
+                new Keyframe(0.00f, 0.60f),
                 new Keyframe(0.25f, 0.90f),
                 new Keyframe(0.50f, 1.00f),
                 new Keyframe(0.75f, 0.90f),
-                new Keyframe(1.00f, 0.35f));
+                new Keyframe(1.00f, 0.60f));
 
             for (int i = 0; i < curve.length; i++)
                 curve.SmoothTangents(i, 0f);

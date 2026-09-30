@@ -27,7 +27,7 @@ namespace AnimalFarm.UI
             holder.anchoredPosition = new Vector2(-24f, -20f);
             holder.sizeDelta = new Vector2(260f, 80f);
 
-            var nearWhite = new Color(0.95f, 0.95f, 0.92f, 1f);
+            var nearWhite = UIStyle.Cream;
 
             _dayText = UIRoot.MakeText(holder, "DayText", 30, TextAnchor.UpperRight, nearWhite);
             var dayRt = _dayText.rectTransform;

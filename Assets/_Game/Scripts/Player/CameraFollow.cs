@@ -43,6 +43,20 @@ namespace AnimalFarm.Player
             ResolveTarget();
         }
 
+        // ---- override (competitions point the camera at the arena) ----------
+
+        private bool _overridden;
+        private Vector3 _overridePos;
+
+        /// <summary>Camera snaps its follow target to a fixed world position (arena).</summary>
+        public void SetOverrideTarget(Transform ignored, Vector3 worldPos)
+        {
+            _overridden = true;
+            _overridePos = worldPos;
+        }
+
+        public void ClearOverrideTarget() => _overridden = false;
+
         private void ResolveTarget()
         {
             if (target == null)
@@ -61,15 +75,17 @@ namespace AnimalFarm.Player
             if (target == null)
             {
                 ResolveTarget();
-                if (target == null) return;
+                if (target == null && !_overridden) return;
             }
 
             // Position: follow the target plus a small lead in the direction of travel.
             Vector2 lead = Vector2.zero;
-            if (_shepherd != null)
+            if (!_overridden && _shepherd != null)
                 lead = Vector2.ClampMagnitude(_shepherd.Velocity * leadFactor, MaxLead);
 
-            Vector3 desired = new Vector3(target.position.x + lead.x, target.position.y + lead.y, CameraZ);
+            Vector3 followPos = _overridden ? _overridePos
+                : new Vector3(target.position.x, target.position.y, 0f);
+            Vector3 desired = new Vector3(followPos.x + lead.x, followPos.y + lead.y, CameraZ);
             Vector3 pos = Vector3.SmoothDamp(transform.position, desired, ref _followVelocity, smoothTime);
             pos.z = CameraZ;
             transform.position = pos;

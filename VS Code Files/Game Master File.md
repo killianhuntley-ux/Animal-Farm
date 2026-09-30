@@ -100,6 +100,8 @@
 
 ### 2.6 Player Verbs & Tools
 > Base set (locked as a starting point, will grow): **walk · plant · terraform/dig · feed by hand · soothe/pet · herd · play the shepherd's flute** (candidate unified "interact" verb: calm, lure, and herd are all flute-driven). Tool/ability progression track TBD — VP's dual-axis pattern (level-granted + purchasable) recommended.
+>
+> **Tool metaphor — locked (owner, 2026-09-30 playtest):** exactly four tools — **Hands · Shovel (till) · Water Pail (dig ponds) · Hammer (opens the Build menu, `B`)**. Building placement = pick from unlocked structures, then a highlightable ghost shows valid cells. Sowing grass moved into the contextual "Plant what here?" picker on tilled dirt. Two interaction layers, locked: **walk-up + E** (contextual ladder) and **click → action menu** (Feed / Soothe / Come along / Inspect, proximity-gated) — same verbs, two entry points.
 
 ### 2.7 Weaving (spirit fusion) — replaces breeding
 > **No classic breeding.** Roster inflow = attraction; outflow = Ascension; *creation* = **Weaving**.
@@ -128,6 +130,8 @@
 
 ### 3.1 Creature Roster
 > Target: **~20–30 base spirit species + ~15–20 woven cryptids** (see 2.7). Tiers emerge from region difficulty (3.3), not labels. Naming convention for species TBD (Pass 4 tone work) — research §8.2 rules apply: splice at a shared phoneme, rarest theme-word for latest species.
+>
+> **Individual stats — "Nature" (owner decision, 2026-09-29):** every individual rolls **Vigor / Grace / Gleam** (2–9). Two spirits of one species are never equal — the collection incentive works *within* species (hunt the 9-Vigor mouse for the boulder trial), Pokémon-style. Stats feed competitions (Vigor→strength events, Grace→races, Gleam→shows/essence). Species-level stat biases deferred until the roster grows. Inspection panel (R) shows name/rename, Spirit, hunger, Nature, fame, fulfilment checklist.
 
 ### 3.2 Dependency Graph Philosophy
 > Regions are the natural tier structure — a species' conditions reference *its region's* terrain, plants, and neighbours, keeping chains mostly region-local (shippable and testable region by region; avoids VP's "everything blocks everything" trap, research §2.2). A handful of deliberate cross-region chains for late-game "wow." Every region keeps an unblockable on-ramp species.
@@ -153,6 +157,8 @@
 > - **Feral Spirits** *(sour track)* — grief-twisted spirits wandering in from deep regions, spooking the flock until soothed/tamed. Taming one first-time = permanent ward progress + parallel collection layer. Recolour + behaviour-swap on existing rigs = near-free content (research §5.4).
 >
 > **Service NPC roster — PROPOSED DRAFT (react/replace):** a general vendor (seeds, materials, food) · a builder (structures, supervisor equipment) · **the Ferryman** (sells land deeds — expansion is literally buying passage into new territory; also the competition circuit's master of ceremonies?) · a healer/medium (morale recovery services). Lean cast; each must have one clear mechanical job (research §4.4).
+>
+> **The Town (owner decision, 2026-09-29):** shops live in a **physical town a short walk from the starting area** — no VP-style scroll-wheel shop menu. The player walks there, embodied (pillar 3). Spirits can come along: feed a **"follow me" treat** to make a resident follow for a period (the treat item formalizes the altar-guiding follow mechanic from §2.2). Town is also the natural home for competition sign-up. Scoped into slice 09.
 
 ### 3.7 Collection Layers
 > - Weave recipe discovery (journal silhouettes, 2.7)
@@ -255,6 +261,8 @@
 > - Species names (formula locked §4.5; authoring later)
 > - Movement aids for a grown map (§6.1)
 > - Weave chains beyond one generation (DLC headroom, §2.7)
+> - Player home with **shelves displaying ascended spirits** (owner idea; pairs with headstone graveyards — see §2.2 legacy)
+> - Player-placeable headstones / designed graveyards (v1 auto-arranges them by the altar)
 
 ---
 

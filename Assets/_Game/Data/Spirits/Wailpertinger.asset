@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41bbfc940441f5d4295536dabdea50f4, type: 3}
+  m_Name: Wailpertinger
+  m_EditorClassIdentifier: 
+  id: wailpertinger
+  displayName: Wailpertinger
+  flavor: Horns from one parent, the wail from the other. Folklore, freshly manufactured.
+  bodySprite: {fileID: -5040097105117894567, guid: 46ad3f84e11128b489c2a96a43370016, type: 3}
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  gateChain: {fileID: 0}
+  favoredFoodId: berry
+  residencyFoodCount: 1
+  maxResidents: 1
+  activity: 0
+  wanderSpeed: 1.6
+  hungerHours: 16
+  spiritDecayPerHungryHour: 8
+  feedSpiritBoost: 15
+  sootheSpiritBoost: 8
+  runawayThreshold: 15
+  homeSprite: {fileID: -9147899515117674942, guid: d5741b534cb671f458a632981bb89174, type: 3}
+  taskKind: 0
+  taskItemId: berry
+  taskItemCount: 2
+  taskRadius: 3
+  taskWindowStartHour: 0
+  taskWindowEndHour: 1
+  taskDescription: A hoard of berries befitting a proper legend.
+  taskHint: (legends demand two more berries)

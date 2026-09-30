@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41bbfc940441f5d4295536dabdea50f4, type: 3}
+  m_Name: Phantomoth
+  m_EditorClassIdentifier: 
+  id: phantomoth
+  displayName: Phantomoth
+  flavor: Drawn to lights it can no longer feel.
+  bodySprite: {fileID: -2562834203527465169, guid: c4984e5758a502b4b8b467c42e8e5bb4, type: 3}
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  gateChain: {fileID: 11400000, guid: d1bec26cbbf7fa04d9896084cf6bc524, type: 2}
+  favoredFoodId: bloom
+  residencyFoodCount: 2
+  maxResidents: 2
+  activity: 2
+  wanderSpeed: 1.6
+  hungerHours: 12
+  spiritDecayPerHungryHour: 8
+  feedSpiritBoost: 15
+  sootheSpiritBoost: 8
+  runawayThreshold: 15
+  homeSprite: {fileID: -8255190939866644252, guid: 90db09d593a704e4197d19334e41093a, type: 3}
+  taskKind: 2
+  taskItemId: 
+  taskItemCount: 1
+  taskRadius: 3
+  taskWindowStartHour: 0
+  taskWindowEndHour: 1
+  taskDescription: One last moonlit dance, at the stroke of midnight.
+  taskHint: (sit with it at midnight)

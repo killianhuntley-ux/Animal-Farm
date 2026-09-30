@@ -29,10 +29,13 @@ namespace AnimalFarm.Core
         public event Action ConsoleToggled;
         public event Action UseToolPressed;
         public event Action CycleToolPressed;
+        public event Action ToolbeltPressed; // stays live while gameplay is blocked (like Pause/Console)
+        public event Action InspectPressed;
+        public event Action BuildPressed;
 
         public InputActionAsset Actions => actions;
 
-        private InputAction _move, _sprint, _zoom, _interact, _fastForward, _pause, _console, _useTool, _cycleTool;
+        private InputAction _move, _sprint, _zoom, _interact, _fastForward, _pause, _console, _useTool, _cycleTool, _toolbelt, _inspect, _build;
 
         private void Awake()
         {
@@ -49,6 +52,9 @@ namespace AnimalFarm.Core
             _console = map.FindAction("Console", true);
             _useTool = map.FindAction("UseTool", true);
             _cycleTool = map.FindAction("CycleTool", true);
+            _toolbelt = map.FindAction("Toolbelt", true);
+            _inspect = map.FindAction("Inspect", true);
+            _build = map.FindAction("Build", true);
 
             _interact.performed += _ => InteractPressed?.Invoke();
             _fastForward.performed += _ => FastForwardPressed?.Invoke();
@@ -56,6 +62,9 @@ namespace AnimalFarm.Core
             _console.performed += _ => ConsoleToggled?.Invoke();
             _useTool.performed += _ => UseToolPressed?.Invoke();
             _cycleTool.performed += _ => CycleToolPressed?.Invoke();
+            _toolbelt.performed += _ => ToolbeltPressed?.Invoke();
+            _inspect.performed += _ => InspectPressed?.Invoke();
+            _build.performed += _ => BuildPressed?.Invoke();
         }
 
         private void OnEnable() => actions.Enable();
@@ -76,13 +85,13 @@ namespace AnimalFarm.Core
             {
                 _move.Disable(); _sprint.Disable(); _zoom.Disable();
                 _interact.Disable(); _fastForward.Disable();
-                _useTool.Disable(); _cycleTool.Disable();
+                _useTool.Disable(); _cycleTool.Disable(); _inspect.Disable(); _build.Disable();
             }
             else
             {
                 _move.Enable(); _sprint.Enable(); _zoom.Enable();
                 _interact.Enable(); _fastForward.Enable();
-                _useTool.Enable(); _cycleTool.Enable();
+                _useTool.Enable(); _cycleTool.Enable(); _inspect.Enable(); _build.Enable();
             }
         }
 

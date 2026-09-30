@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41bbfc940441f5d4295536dabdea50f4, type: 3}
+  m_Name: Mausoleum
+  m_EditorClassIdentifier: 
+  id: mausoleum
+  displayName: Mausoleum
+  flavor: A mouse-shaped memory. It squeaks in past tense.
+  bodySprite: {fileID: 6922234187173170307, guid: 87cec96e98084ee409ca9a23df596bb1, type: 3}
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  gateChain: {fileID: 11400000, guid: ed2c6b721eadcb040b9be42c027e22f3, type: 2}
+  favoredFoodId: wheat
+  residencyFoodCount: 1
+  maxResidents: 3
+  activity: 0
+  wanderSpeed: 1.6
+  hungerHours: 14
+  spiritDecayPerHungryHour: 8
+  feedSpiritBoost: 15
+  sootheSpiritBoost: 8
+  runawayThreshold: 15
+  homeSprite: {fileID: -5047089707866633592, guid: cedfd2a955347b244ab37f52fa4150bc, type: 3}
+  taskKind: 0
+  taskItemId: berry
+  taskItemCount: 1
+  taskRadius: 3
+  taskWindowStartHour: 0
+  taskWindowEndHour: 1
+  taskDescription: A last taste of something it never dared try.
+  taskHint: (it hungers for one perfect murkberry)

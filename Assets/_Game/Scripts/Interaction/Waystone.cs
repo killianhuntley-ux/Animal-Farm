@@ -36,6 +36,7 @@ namespace AnimalFarm.Interaction
         {
             _renderer = GetComponent<SpriteRenderer>();
             _initialScale = transform.localScale;
+            AnimalFarm.UI.WorldLabel.Attach(gameObject, "Waystone", -0.75f);
         }
 
         public bool CanInteract(GameObject actor) => true;
@@ -47,6 +48,10 @@ namespace AnimalFarm.Interaction
             _colorIndex = (_colorIndex + 1) % palette.Length;
             _renderer.color = palette[_colorIndex];
             Debug.Log(FlavorLines[_colorIndex % FlavorLines.Length], this);
+            AnimalFarm.UI.FloatingText.Show(
+                transform.position + Vector3.up * 0.9f,
+                FlavorLines[_colorIndex % FlavorLines.Length],
+                new Color(0.95f, 0.95f, 0.85f));
         }
 
         public void SetFocused(bool focused)

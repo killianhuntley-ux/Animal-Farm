@@ -1,9 +1,11 @@
-# 09 — Economy & Vendors
+# 09 — Economy, Vendors & The Town
 
-**Question this slice answers:** *Does money flow at a rate that makes expansion feel earned — tight early, opening later — and does every NPC have one clear job?*
-**GDD:** §3.5 (economy), §3.6 (service NPCs), §3.4 (economic gating IS progression)
+**Question this slice answers:** *Does money flow at a rate that makes expansion feel earned — and is walking to town (spirits in tow) a pleasure rather than a chore?*
+**GDD:** §3.5 (economy), §3.6 (service NPCs + The Town), §3.4 (economic gating IS progression)
 
 Until now everything was debug-free. This slice turns the taps on and prices the world.
+
+**OWNER DECISION (2026-09-29): shops are a physical TOWN, not a menu.** A settlement a short walk from the starting field: vendor stalls, the Ferryman's landing, later the competition board. Spirits can accompany you via a **"follow me" treat** — a purchasable item that triggers the follow behaviour (built in slice 04 for altar-guiding) for a duration. Scope adds: town zone layout (greybox), walk-distance tuning, treat item + duration, and NPC stall interactables replacing abstract shop UI-only access.
 
 ---
 

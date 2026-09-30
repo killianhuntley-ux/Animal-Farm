@@ -23,7 +23,8 @@ namespace AnimalFarm.Requirements
 
         private void Update()
         {
-            if (Keyboard.current?.f1Key.wasPressedThisFrame == true)
+            if (Keyboard.current?.f1Key.wasPressedThisFrame == true
+                && !AnimalFarm.Core.UIInputLock.TextInputActive)
                 _visible = !_visible;
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AnimalFarm.Core;
+using AnimalFarm.Spirits;
 using AnimalFarm.World;
 using UnityEngine;
 
@@ -11,21 +12,27 @@ namespace AnimalFarm.Player
     /// tile in front of them (dominant-axis snap of FacingDir) — gamepad-first,
     /// no mouse targeting. Cycle tools with CycleTool; apply with UseTool.
     /// Holding UseTool re-applies as the target cell changes ("brush feel").
+    /// Belt: Hands, Shovel (-> Dirt), Water Pail (Dirt -> Water), Hammer
+    /// (opens the build menu; B does too, with any tool held).
     /// Sits on the shepherd next to ShepherdController.
     /// </summary>
     public class ToolController : MonoBehaviour
     {
-        private enum ToolKind { Till, SowGrass, DigWater, Seed }
+        private enum ToolKind { None, Till, SowGrass, DigWater, Seed, Home, Hammer }
 
         private sealed class ToolDef
         {
             public string name;
             public ToolKind kind;
-            public PlantSpecies species; // Seed tools only
+            public PlantSpecies species;              // Seed tools only
+            public SpiritSpeciesDefinition homeSpecies; // Home tools only
         }
 
-        [Header("Seeds (assigned by bootstrapper; one seed tool per species)")]
+        [Header("Seeds (assigned by bootstrapper; read by the contextual seed picker)")]
         [SerializeField] private PlantSpecies[] seedSpecies;
+
+        [Header("Homes (assigned by bootstrapper; one home tool per spirit species)")]
+        [SerializeField] private SpiritSpeciesDefinition[] homeSpecies;
 
         [Header("Reticle (assigned by bootstrapper; a white square sprite)")]
         [SerializeField] private SpriteRenderer reticle;
@@ -38,11 +45,45 @@ namespace AnimalFarm.Player
         public string CurrentToolName =>
             _tools.Count > 0 ? _tools[_toolIndex].name : string.Empty;
 
+        /// <summary>Display names of every tool, in selection order.</summary>
+        public IReadOnlyList<string> ToolNames
+        {
+            get
+            {
+                var names = new List<string>(_tools.Count);
+                for (int i = 0; i < _tools.Count; i++)
+                    names.Add(_tools[i].name);
+                return names;
+            }
+        }
+
+        /// <summary>Index of the currently selected tool.</summary>
+        public int CurrentToolIndex => _toolIndex;
+
+        /// <summary>Plantable species available to the contextual seed picker.</summary>
+        public PlantSpecies[] SeedSpecies => seedSpecies;
+
         /// <summary>Fired whenever the selected tool changes (payload = tool name).</summary>
         public event Action<string> OnToolChanged;
 
+        /// <summary>Selects a tool by index (out-of-range values wrap around).</summary>
+        public void SelectTool(int index)
+        {
+            if (_tools.Count == 0) return;
+            _toolIndex = ((index % _tools.Count) + _tools.Count) % _tools.Count;
+            OnToolChanged?.Invoke(CurrentToolName);
+        }
+
+        /// <summary>Current target cell in front of the shepherd; false if none.</summary>
+        public bool TryGetTargetCell(out Vector2Int cell)
+        {
+            cell = _targetCell;
+            return _hasTarget;
+        }
+
         private static readonly Color ValidColor = new Color(1f, 1f, 1f, 0.55f);
         private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.35f);
+        private static readonly Color NeutralColor = new Color(1f, 1f, 1f, 0.35f); // hammer: no cell action
 
         private readonly List<ToolDef> _tools = new List<ToolDef>();
         private int _toolIndex;
@@ -70,6 +111,7 @@ namespace AnimalFarm.Player
             {
                 input.CycleToolPressed += HandleCycleTool;
                 input.UseToolPressed += HandleUseToolPressed;
+                input.BuildPressed += HandleBuildPressed;
             }
 
             OnToolChanged?.Invoke(CurrentToolName);
@@ -82,32 +124,26 @@ namespace AnimalFarm.Player
             {
                 input.CycleToolPressed -= HandleCycleTool;
                 input.UseToolPressed -= HandleUseToolPressed;
+                input.BuildPressed -= HandleBuildPressed;
             }
         }
 
         private void BuildTools()
         {
             _tools.Clear();
-            _tools.Add(new ToolDef { name = "Till", kind = ToolKind.Till });
-            _tools.Add(new ToolDef { name = "Sow Grass", kind = ToolKind.SowGrass });
-            _tools.Add(new ToolDef { name = "Dig Water", kind = ToolKind.DigWater });
+            // Default: empty hands — tools are only "out" when deliberately selected.
+            _tools.Add(new ToolDef { name = "Hands", kind = ToolKind.None });
+            _tools.Add(new ToolDef { name = "Shovel", kind = ToolKind.Till });
+            _tools.Add(new ToolDef { name = "Water Pail", kind = ToolKind.DigWater });
 
-            if (seedSpecies != null)
-            {
-                foreach (var species in seedSpecies)
-                {
-                    if (species == null) continue;
-                    string label = !string.IsNullOrEmpty(species.displayName)
-                        ? species.displayName
-                        : species.id;
-                    _tools.Add(new ToolDef
-                    {
-                        name = "Seed: " + label,
-                        kind = ToolKind.Seed,
-                        species = species
-                    });
-                }
-            }
+            // The Hammer opens the build menu (HomePickerUI); placement then
+            // happens in SelectionController's ghost mode, not per-swing.
+            _tools.Add(new ToolDef { name = "Hammer", kind = ToolKind.Hammer });
+
+            // Sow Grass moved into the seed picker ("Grass" option on dirt).
+            // Seeds are contextual too (Interact on empty dirt opens the seed
+            // picker). ToolKind.SowGrass/Seed/Home and their rules stay for
+            // safety; seedSpecies is read via SeedSpecies.
 
             _toolIndex = 0;
         }
@@ -149,7 +185,8 @@ namespace AnimalFarm.Player
             if (reticle == null) return;
 
             var grid = TerrainGrid.Instance;
-            if (!_hasTarget || grid == null)
+            ToolKind kind = _tools.Count > 0 ? _tools[_toolIndex].kind : ToolKind.None;
+            if (!_hasTarget || grid == null || kind == ToolKind.None)
             {
                 reticle.enabled = false;
                 return;
@@ -157,7 +194,12 @@ namespace AnimalFarm.Player
 
             reticle.enabled = true;
             reticle.transform.position = grid.CellCenterWorld(_targetCell);
-            reticle.color = CanApplyCurrentTool(_targetCell) ? ValidColor : InvalidColor;
+
+            // Hammer never acts on the cell itself — neutral white on any
+            // in-bounds cell instead of the valid/invalid verdict.
+            reticle.color = kind == ToolKind.Hammer
+                ? NeutralColor
+                : CanApplyCurrentTool(_targetCell) ? ValidColor : InvalidColor;
         }
 
         // ---- applying --------------------------------------------------------
@@ -171,6 +213,9 @@ namespace AnimalFarm.Player
 
         private void HandleUseToolPressed()
         {
+            // A selection click (or move-mode placement) must not also swing the tool.
+            if (SelectionController.ConsumedClickFrame == Time.frameCount) return;
+            if (SelectionController.Instance != null && SelectionController.Instance.IsMoving) return;
             TryApply();
         }
 
@@ -183,6 +228,10 @@ namespace AnimalFarm.Player
             var input = GameInput.Instance;
             if (input == null || !input.UseToolHeld || !_hasTarget) return;
 
+            // Selection clicks and home move mode suppress the held brush too.
+            if (SelectionController.ConsumedClickFrame == Time.frameCount) return;
+            if (SelectionController.Instance != null && SelectionController.Instance.IsMoving) return;
+
             bool cellChanged = !_hasAppliedCell || _targetCell != _lastAppliedCell;
             bool intervalElapsed = Time.time - _lastApplyTime >= brushRepeatSeconds;
             if (cellChanged || intervalElapsed)
@@ -191,7 +240,20 @@ namespace AnimalFarm.Player
 
         private void TryApply()
         {
-            if (!_hasTarget || _tools.Count == 0) return;
+            if (_tools.Count == 0) return;
+
+            // Hammer: opens the build menu regardless of target validity —
+            // it never acts on the cell directly.
+            if (_tools[_toolIndex].kind == ToolKind.Hammer)
+            {
+                _hasAppliedCell = _hasTarget;
+                _lastAppliedCell = _targetCell;
+                _lastApplyTime = Time.time;
+                OpenBuildMenu();
+                return;
+            }
+
+            if (!_hasTarget) return;
             if (!CanApplyCurrentTool(_targetCell)) return;
 
             var grid = TerrainGrid.Instance;
@@ -212,11 +274,32 @@ namespace AnimalFarm.Player
                     // Seeds are FREE this slice — no inventory consumption.
                     PlantManager.Instance.PlantSeed(tool.species, _targetCell);
                     break;
+                case ToolKind.Home:
+                    // Legacy kind (never built onto the belt anymore): homes are
+                    // placed via the build menu -> SelectionController ghost mode.
+                    AnimalFarm.UI.HomePickerUI.Instance?.Open();
+                    break;
             }
 
             _hasAppliedCell = true;
             _lastAppliedCell = _targetCell;
             _lastApplyTime = Time.time;
+        }
+
+        // ---- build menu --------------------------------------------------------
+
+        /// <summary>B key: open the build menu with any tool held.</summary>
+        private void HandleBuildPressed()
+        {
+            if (UIInputLock.BlockDirectKeys) return;
+            OpenBuildMenu();
+        }
+
+        private void OpenBuildMenu()
+        {
+            var comp = AnimalFarm.Competitions.CompetitionManager.Instance;
+            if (comp != null && comp.EventRunning) return;
+            AnimalFarm.UI.HomePickerUI.Instance?.Open();
         }
 
         // ---- rules -----------------------------------------------------------
@@ -243,9 +326,9 @@ namespace AnimalFarm.Player
             switch (tool.kind)
             {
                 case ToolKind.Till:
-                    // Applies on Scrub/Grass/Water; blocked over plants —
-                    // plants die via ground-change only when deliberate.
-                    return surface != Surface.Dirt && !hasPlant;
+                    // Shovel: applies on Scrub/Grass/Water; blocked over plants
+                    // and homes — ground-change kills only when deliberate.
+                    return surface != Surface.Dirt && !hasPlant && !Home.AnyAtCell(cell);
 
                 case ToolKind.SowGrass:
                     return surface == Surface.Dirt && !hasPlant;
@@ -258,6 +341,17 @@ namespace AnimalFarm.Player
                         && PlantManager.Instance != null
                         && surface == tool.species.requiredSurface
                         && !hasPlant;
+
+                case ToolKind.Home:
+                    return HomeManager.Instance != null
+                        && surface != Surface.Water
+                        && !hasPlant
+                        && !Home.AnyAtCell(cell);
+
+                case ToolKind.Hammer:
+                    // No cell action of its own — any in-bounds cell reads
+                    // neutral (bounds were already checked above).
+                    return true;
 
                 default:
                     return false;

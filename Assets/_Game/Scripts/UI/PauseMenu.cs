@@ -66,11 +66,11 @@ namespace AnimalFarm.UI
             panel.sizeDelta = new Vector2(360f, 400f);
 
             var panelImg = panel.gameObject.AddComponent<Image>();
-            panelImg.color = new Color(0.13f, 0.13f, 0.15f, 0.95f);
+            UIStyle.ApplyPanel(panelImg, UIStyle.PanelBg);
 
             var layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(28, 28, 24, 24);
-            layout.spacing = 16f;
+            layout.padding = new RectOffset(24, 24, 24, 24);
+            layout.spacing = 12f;
             layout.childAlignment = TextAnchor.UpperCenter;
             layout.childControlWidth = true;
             layout.childControlHeight = false;
@@ -78,10 +78,12 @@ namespace AnimalFarm.UI
             layout.childForceExpandHeight = false;
 
             // Title.
-            var title = UIRoot.MakeText(panel, "Title", 40, TextAnchor.MiddleCenter,
-                new Color(0.95f, 0.95f, 0.92f, 1f));
+            var title = UIRoot.MakeText(panel, "Title", 34, TextAnchor.MiddleCenter,
+                UIStyle.Cream);
             title.text = "Paused";
-            title.rectTransform.sizeDelta = new Vector2(0f, 64f);
+            title.rectTransform.sizeDelta = new Vector2(0f, 56f);
+
+            UIStyle.MakeDivider(panel);
 
             // Buttons.
             MakeButton(panel, "Resume", OnResume);
@@ -90,7 +92,7 @@ namespace AnimalFarm.UI
 
             // Transient "Saved ✓" feedback.
             _savedLabel = UIRoot.MakeText(panel, "SavedLabel", 24, TextAnchor.MiddleCenter,
-                new Color(0.6f, 1f, 0.6f, 1f));
+                UIStyle.Gold);
             _savedLabel.text = "Saved!";
             _savedLabel.rectTransform.sizeDelta = new Vector2(0f, 32f);
             _savedLabel.gameObject.SetActive(false);
@@ -110,20 +112,11 @@ namespace AnimalFarm.UI
 
             var button = go.AddComponent<Button>();
             button.targetGraphic = bg;
-
-            var colors = button.colors;
-            colors.normalColor = new Color(0.24f, 0.24f, 0.27f, 1f);   // dark grey
-            colors.highlightedColor = new Color(0.34f, 0.34f, 0.38f, 1f);
-            colors.pressedColor = new Color(0.18f, 0.18f, 0.20f, 1f);
-            colors.selectedColor = new Color(0.30f, 0.30f, 0.34f, 1f);
-            colors.disabledColor = new Color(0.15f, 0.15f, 0.16f, 0.6f);
-            colors.fadeDuration = 0.08f;
-            button.colors = colors;
+            UIStyle.StyleButton(button);
 
             button.onClick.AddListener(onClick);
 
-            var text = UIRoot.MakeText(rt, "Label", 26, TextAnchor.MiddleCenter,
-                new Color(0.95f, 0.95f, 0.92f, 1f));
+            var text = UIRoot.MakeText(rt, "Label", 26, TextAnchor.MiddleCenter, UIStyle.Cream);
             text.text = label;
             Stretch(text.rectTransform);
         }

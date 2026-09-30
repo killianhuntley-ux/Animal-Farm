@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41bbfc940441f5d4295536dabdea50f4, type: 3}
+  m_Name: Mothmaus
+  m_EditorClassIdentifier: 
+  id: mothmaus
+  displayName: Mothmaus
+  flavor: Seen only at the edge of lamplight. Squeaks portents nobody asked for.
+  bodySprite: {fileID: -1222968791306579428, guid: 67bed836b0fddc34195a95ebf9d668b8, type: 3}
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  gateChain: {fileID: 0}
+  favoredFoodId: bloom
+  residencyFoodCount: 1
+  maxResidents: 1
+  activity: 0
+  wanderSpeed: 1.6
+  hungerHours: 16
+  spiritDecayPerHungryHour: 8
+  feedSpiritBoost: 15
+  sootheSpiritBoost: 8
+  runawayThreshold: 15
+  homeSprite: {fileID: -8255190939866644252, guid: 90db09d593a704e4197d19334e41093a, type: 3}
+  taskKind: 2
+  taskItemId: 
+  taskItemCount: 1
+  taskRadius: 3
+  taskWindowStartHour: 0
+  taskWindowEndHour: 2
+  taskDescription: One last portent, whispered at the witching hour.
+  taskHint: (sit with it in the small hours)
