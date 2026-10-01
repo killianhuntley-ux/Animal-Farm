@@ -26,6 +26,10 @@ namespace AnimalFarm.Spirits
         private readonly List<Headstone> _all = new List<Headstone>();
         public IReadOnlyList<Headstone> All => _all;
 
+        /// <summary>The stone sprite (ceremony drop + placement ghost); may be
+        /// null in unwired scenes — callers must degrade.</summary>
+        public Sprite HeadstoneSprite => headstoneSprite;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -37,8 +41,20 @@ namespace AnimalFarm.Spirits
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>Lays a headstone for a spirit about to ascend. Call BEFORE despawn.</summary>
+        /// <summary>Lays a headstone for a spirit about to ascend on the grave
+        /// plot's auto-grid. Call BEFORE despawn.</summary>
         public Headstone CreateHeadstone(SpiritAgent spirit)
+        {
+            _all.RemoveAll(h => h == null);
+            return CreateHeadstoneAt(spirit, SlotPosition(_all.Count));
+        }
+
+        /// <summary>
+        /// Lays a headstone at an explicit position (the Styx crossing drops
+        /// it at the pad; the player then places it where they like). Call
+        /// BEFORE despawn — stats are read off the live agent.
+        /// </summary>
+        public Headstone CreateHeadstoneAt(SpiritAgent spirit, Vector3 pos)
         {
             if (spirit == null) return null;
 
@@ -54,7 +70,6 @@ namespace AnimalFarm.Spirits
             float daysAmongUs = Mathf.Max(0f, (totalHours - spirit.ResidentSinceTotalHours) / 24f);
 
             _all.RemoveAll(h => h == null);
-            Vector3 pos = SlotPosition(_all.Count);
             return Spawn(spiritName, speciesId, speciesDisplay,
                 spirit.TimesFed, ascendedDay, daysAmongUs, pos);
         }

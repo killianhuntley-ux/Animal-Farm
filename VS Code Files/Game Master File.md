@@ -90,6 +90,8 @@
 
 ### 2.4 Friction, Failure & Stakes
 > Loss model locked in §1.7; friction cast locked in §3.6.
+> **"Work is never wasted" — owner law (2026-10-01):** built/grown things persist until something *visible and deliberate* changes them (the player, or a legible threat like a chewing creature or matured weed). No silent decay, no maintenance treadmills that erase effort. Weeds sour nearby moods and are telegraphed; they never quietly revert terrain.
+> **Terrain direction (muscle phase):** evolve away from tile-feel toward terrain *morphing* — shallow/deep water, trenches influencing flow, free sub-tile placement of flora. Buildings stay grid-snapped; the land should feel sculpted (VP was tiles that felt natural).
 > **Bad-event framework:** two families — **villain events** (Repo-man approach, Rival poaching attempt, feral spirit incursion) and **biome-unique events** (per-region hazards, authored alongside each region; event list develops with region production).
 > All events obey the alarm contract: fire early enough to act on foot from anywhere reachable, generous timers, helper coverage as the purchasable alternative (2.3).
 
@@ -145,10 +147,12 @@
 > **Economic/organic gating is primary — no explicit player level.** Money → new zones → new materials, new competitions, new spirit types. Expansion *is* the progression system. Fame accrues to individual spirits (competition record), not a separate player-XP track. ⏳ open: whether shepherd reputation exists as a soft secondary gate (e.g. prestige events requiring N ascensions).
 
 ### 3.5 Economy
+> **Currency — LOCKED (owner, 2026-10-01): coins, themed as OBOLS** — the ferryman's toll; the whole economy is coin-based, in line with the conceit.
 > **Income:** selling plants/produce · **spirit essence** — happy spirits passively shed a little of their spirit as a harvestable byproduct (the candiosity analogue: contentment *is* production) · competition prize money.
 > **Sinks:** land purchases (primary) · competition entry fees · helpers/supervisor equipment · buildings · seeds/materials.
 > **Spirits are never sold** — essence replaces the sell-the-creature economy; fits the fiction.
-> ⏳ open: is essence plain money, or the **ritual currency consumed by Weaving** (which would unify "keep everyone happy" and "make cryptids" into one pursuit)?
+> **Essence — LOCKED (owner, 2026-10-01): dual-purpose.** Sell it for obols, or save it as the **Weave ritual's toll** — deeper/more complex weaves cost more essence. The sell-vs-save tension is the point.
+> **Land expansion — LOCKED (owner, 2026-10-01):** Cities-Skylines-style **parcel overview via the Ferryman**: inspect parcels (stats, price), buy with obols; price scales with distance from the farm. Muscle phase: mini-map preview + per-parcel terrain stats.
 
 ### 3.6 NPCs / Services
 > **The friction cast — locked (all three):**

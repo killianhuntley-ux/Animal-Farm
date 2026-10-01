@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using AnimalFarm.Core;
 using AnimalFarm.Core.Saving;
+using AnimalFarm.Onboarding;
 using AnimalFarm.Spirits;
 using AnimalFarm.World;
 using UnityEngine;
@@ -144,6 +145,9 @@ namespace AnimalFarm.Debugging
                 case "help":
                     Print("help            - list commands");
                     Print("time <hours>    - set time of day (0-24)");
+                    Print("day [n]         - show the date, or jump to absolute day n");
+                    Print("season [n]      - list seasons, or jump to season n (keeps day-of-season)");
+                    Print("rain [on|off]   - force/toggle rain for today");
                     Print("ff              - toggle fast-forward");
                     Print("tp <x> <y>      - teleport player");
                     Print("save            - save the game");
@@ -151,7 +155,11 @@ namespace AnimalFarm.Debugging
                     Print("spawn <id>      - force-spawn a spirit as visitor");
                     Print("spirits         - list all spirit agents");
                     Print("inv             - list inventory items");
+                    Print("coins [n]       - add coins (default 50)");
                     Print("grow            - force-mature all plants");
+                    Print("weed            - force-spawn a weed near the player");
+                    Print("weeds           - list live weeds (age and cell)");
+                    Print("villain <kind>  - force a villain visit (digger|devourer|scarer)");
                     Print("blessing [name] - fill a resident's spirit (name or 'all'; default all)");
                     Print("taskdone [name] - complete a resident's final wish (name or 'all')");
                     Print("resident <id> [name] - instantly spawn a named RESIDENT of a species");
@@ -160,11 +168,31 @@ namespace AnimalFarm.Debugging
                     Print("weave           - weave the first recipe-matching resident pair");
                     Print("gentle [on|off] - set/toggle Gentle Passage (disables the Repo-man)");
                     Print("repo            - dispatch the Repo-man at a runaway now");
-                    Print("parcel <0|1>    - force-open a land parcel (no cost)");
+                    Print("parcel <0|1>    - force-open a land parcel (no cost; bypasses the Ferryman)");
+                    Print("guide           - show the current guide-light objective");
+                    Print("skipguide       - skip the guide-light onboarding");
+                    Print("bleep [kind]    - audio self-test; play a bleep (default Click)");
+                    Print("tooltier <tool> <1-3> - set a tool's upgrade tier (e.g. tooltier Hoe 3)");
                     break;
 
                 case "time":
                     CmdTime(args);
+                    break;
+
+                case "day":
+                    CmdDay(args);
+                    break;
+
+                case "season":
+                    CmdSeason(args);
+                    break;
+
+                case "rain":
+                    CmdRain(args);
+                    break;
+
+                case "tooltier":
+                    CmdToolTier(args);
                     break;
 
                 case "ff":
@@ -198,8 +226,24 @@ namespace AnimalFarm.Debugging
                     CmdInventory();
                     break;
 
+                case "coins":
+                    CmdCoins(args);
+                    break;
+
                 case "grow":
                     CmdGrow();
+                    break;
+
+                case "weed":
+                    CmdWeed();
+                    break;
+
+                case "weeds":
+                    CmdWeeds();
+                    break;
+
+                case "villain":
+                    CmdVillain(args);
                     break;
 
                 case "blessing":
@@ -238,6 +282,18 @@ namespace AnimalFarm.Debugging
                     CmdParcel(args);
                     break;
 
+                case "guide":
+                    CmdGuide();
+                    break;
+
+                case "skipguide":
+                    CmdSkipGuide();
+                    break;
+
+                case "bleep":
+                    CmdBleep(args);
+                    break;
+
                 default:
                     Print("Unknown: " + cmd + " (try 'help')");
                     break;
@@ -257,6 +313,99 @@ namespace AnimalFarm.Debugging
             hours = Mathf.Clamp(hours, 0f, 24f);
             GameClock.Instance.SetTimeHours(hours);
             Print("Time set to " + hours.ToString("0.##", CultureInfo.InvariantCulture) + "h.");
+        }
+
+        private void CmdDay(string[] args)
+        {
+            if (GameClock.Instance == null) { Print("GameClock not available."); return; }
+
+            if (args.Length >= 2)
+            {
+                if (!int.TryParse(args[1], out int day) || day < 1)
+                {
+                    Print("Usage: day [n >= 1]");
+                    return;
+                }
+                GameClock.Instance.SetDay(day);
+            }
+
+            var calendar = GameCalendar.Instance;
+            Print("Day " + GameClock.Instance.Day
+                  + (calendar != null ? " (" + calendar.DateLine + ")" : " (no calendar)"));
+        }
+
+        private void CmdSeason(string[] args)
+        {
+            var calendar = GameCalendar.GetOrCreate();
+            if (calendar == null) { Print("GameCalendar not available."); return; }
+
+            if (args.Length < 2)
+            {
+                for (int i = 0; i < calendar.SeasonCount; i++)
+                {
+                    var def = calendar.GetSeason(i);
+                    Print(i + ": " + def.name
+                          + " (rain " + Mathf.RoundToInt(def.rainWeight * 100f) + "%)"
+                          + (i == calendar.SeasonIndex ? "  <- now" : ""));
+                }
+                return;
+            }
+
+            if (!int.TryParse(args[1], out int index)
+                || index < 0 || index >= calendar.SeasonCount)
+            {
+                Print("Usage: season [0-" + (calendar.SeasonCount - 1) + "]");
+                return;
+            }
+
+            calendar.Debug_SetSeason(index);
+            Print("Now " + calendar.DateLine + ".");
+        }
+
+        private void CmdRain(string[] args)
+        {
+            var weather = WeatherManager.GetOrCreate();
+            if (weather == null) { Print("WeatherManager not available."); return; }
+
+            bool value;
+            if (args.Length >= 2)
+            {
+                string arg = args[1].ToLowerInvariant();
+                if (arg == "on") value = true;
+                else if (arg == "off") value = false;
+                else { Print("Usage: rain [on|off]"); return; }
+            }
+            else
+            {
+                value = !weather.IsRainDay;
+            }
+
+            weather.Debug_ForceRain(value);
+            Print("Rain " + (value ? "ON" : "OFF") + " for today (re-rolls at dawn).");
+        }
+
+        private void CmdToolTier(string[] args)
+        {
+            // "Water Pail" is two words: the LAST arg is the tier, everything
+            // between the command and it is the tool name.
+            if (args.Length < 3
+                || !int.TryParse(args[args.Length - 1], out int tier))
+            {
+                Print("Usage: tooltier <tool> <1-3> (e.g. tooltier Water Pail 2)");
+                return;
+            }
+
+            var tools = FindFirstObjectByType<AnimalFarm.Player.ToolController>();
+            if (tools == null) { Print("ToolController not available."); return; }
+
+            string name = string.Join(" ", args, 1, args.Length - 2);
+            if (!tools.SetToolTier(name, tier))
+            {
+                Print("Unknown tool '" + name + "'. Tools: Hands, Hoe, Water Pail, Shovel, Hammer.");
+                return;
+            }
+
+            Print(name + " is now tier " + tools.GetToolTier(name) + ".");
         }
 
         private void CmdFastForward()
@@ -344,6 +493,21 @@ namespace AnimalFarm.Debugging
                 Print(pair.Key + " x " + pair.Value);
         }
 
+        private void CmdCoins(string[] args)
+        {
+            if (Inventory.Instance == null) { Print("Inventory not available."); return; }
+
+            int amount = 50;
+            if (args.Length >= 2 && (!int.TryParse(args[1], out amount) || amount <= 0))
+            {
+                Print("Usage: coins [n]");
+                return;
+            }
+
+            Inventory.Instance.Add("coin", amount);
+            Print("Added " + amount + " coin(s). Total: " + Inventory.Instance.Count("coin") + ".");
+        }
+
         private void CmdGrow()
         {
             if (PlantManager.Instance == null) { Print("PlantManager not available."); return; }
@@ -357,6 +521,68 @@ namespace AnimalFarm.Debugging
                 grown++;
             }
             Print("Force-matured " + grown + " plant(s).");
+        }
+
+        private void CmdWeed()
+        {
+            if (WeedManager.Instance == null) { Print("WeedManager not available."); return; }
+
+            var weed = WeedManager.Instance.ForceSpawnNearPlayer();
+            Print(weed != null
+                ? "Weed spawned at cell (" + weed.Cell.x + ", " + weed.Cell.y + ")."
+                : "No sproutable cell near the player (water/plants/homes everywhere?).");
+        }
+
+        private void CmdWeeds()
+        {
+            if (WeedManager.Instance == null) { Print("WeedManager not available."); return; }
+
+            var weeds = WeedManager.Instance.AllWeeds;
+            int live = 0;
+            if (weeds != null)
+            {
+                for (int i = 0; i < weeds.Count; i++)
+                {
+                    var w = weeds[i];
+                    if (w == null) continue;
+                    live++;
+
+                    float age = GameClock.Instance != null
+                        ? GameClock.Instance.TotalHours - w.SpawnedAtTotalHours
+                        : 0f;
+                    Print("weed at (" + w.Cell.x + ", " + w.Cell.y + ") - "
+                          + (w.IsMature ? "MATURE" : "young") + " - "
+                          + age.ToString("0.#", CultureInfo.InvariantCulture) + "h old");
+                }
+            }
+            Print(live == 0 ? "(no weeds)" : live + " weed(s) live.");
+        }
+
+        private void CmdVillain(string[] args)
+        {
+            var manager = VillainManager.GetOrCreate();
+            if (manager == null) { Print("VillainManager not available."); return; }
+
+            if (args.Length < 2)
+            {
+                Print("Usage: villain <digger|devourer|scarer>");
+                return;
+            }
+
+            VillainKind kind;
+            switch (args[1].ToLowerInvariant())
+            {
+                case "digger":   kind = VillainKind.Digger; break;
+                case "devourer": kind = VillainKind.Devourer; break;
+                case "scarer":   kind = VillainKind.Scarer; break;
+                default:
+                    Print("Unknown villain: " + args[1] + " (digger|devourer|scarer)");
+                    return;
+            }
+
+            Print(manager.Debug_ForceVisit(kind)
+                ? "A " + kind + " slips onto the farm."
+                : "Spawn refused (a villain is already visiting, or no terrain).");
         }
 
         private void CmdBlessing(string[] args)
@@ -600,6 +826,51 @@ namespace AnimalFarm.Debugging
             Print(ParcelManager.Instance.Debug_Unlock(index)
                 ? "Parcel " + index + " force-opened (no cost)."
                 : "Could not open parcel " + index + ".");
+        }
+
+        private void CmdGuide()
+        {
+            if (OnboardingManager.Instance == null) { Print("OnboardingManager not available."); return; }
+            Print(OnboardingManager.Instance.IsComplete
+                ? "complete"
+                : OnboardingManager.Instance.CurrentObjective);
+        }
+
+        /// <summary>
+        /// Audio self-test: plays a bleep straight through Bleeps, isolating
+        /// clip synthesis and the audio host from any event wiring. No arg
+        /// plays Click at full volume; an arg matches a BleepKind name
+        /// case-insensitively.
+        /// </summary>
+        private void CmdBleep(string[] args)
+        {
+            if (Bleeps.Muted) Print("(note: Bleeps.Muted is ON -- nothing will be audible)");
+
+            if (args.Length < 2)
+            {
+                Bleeps.Play(BleepKind.Click);
+                Print("Played Click at full volume.");
+                return;
+            }
+
+            if (System.Enum.TryParse(args[1], true, out BleepKind kind))
+            {
+                Bleeps.Play(kind);
+                Print("Played " + kind + " at full volume.");
+            }
+            else
+            {
+                Print("Unknown kind: " + args[1]);
+                Print("Kinds: " + string.Join(", ", System.Enum.GetNames(typeof(BleepKind))));
+            }
+        }
+
+        private void CmdSkipGuide()
+        {
+            if (OnboardingManager.Instance == null) { Print("OnboardingManager not available."); return; }
+            if (OnboardingManager.Instance.IsComplete) { Print("Onboarding already complete."); return; }
+            OnboardingManager.Instance.Skip();
+            Print("Guide-light onboarding skipped.");
         }
 
         private void Print(string line)

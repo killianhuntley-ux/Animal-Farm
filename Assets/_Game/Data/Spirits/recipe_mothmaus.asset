@@ -15,3 +15,4 @@ MonoBehaviour:
   parentA: {fileID: 11400000, guid: 0c36b15752471ae41a13a9f546a0889c, type: 2}
   parentB: {fileID: 11400000, guid: 0117ca86b37b2044181a372c63be7f96, type: 2}
   result: {fileID: 11400000, guid: a7f712d813a61ae4f895b8ebb9607d40, type: 2}
+  essenceCost: 6

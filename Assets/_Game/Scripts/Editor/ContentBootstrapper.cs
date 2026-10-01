@@ -65,6 +65,7 @@ namespace AnimalFarm.EditorTools
             MakeTile("Tile_Dirt", "tile_dirt", Tile.ColliderType.None);
             MakeTile("Tile_Grass", "tile_grass", Tile.ColliderType.None);
             MakeTile("Tile_Water", "tile_water", Tile.ColliderType.Grid); // impassable
+            MakeTile("Tile_Locked", "tile_locked", Tile.ColliderType.None); // unpurchased parcel (walls block, not tiles)
         }
 
         private static void MakeTile(string name, string spriteName, Tile.ColliderType collider)
@@ -207,7 +208,52 @@ namespace AnimalFarm.EditorTools
             def.hungerHours = hungerHours;
             def.homeSprite = LoadSprite("home_" + id);
             ApplyFinalTask(def);
+            ApplyPersonality(def);
             EditorUtility.SetDirty(def);
+        }
+
+        /// <summary>
+        /// Muscle 03: per-species idle-quirk weights, habitat habit and synth
+        /// voice profile. Weights are relative (nap/stretch/hop/leafChase);
+        /// voice = base pitch Hz, contour -1..1 (down..up), chirp seconds.
+        /// </summary>
+        private static void ApplyPersonality(SpiritSpeciesDefinition def)
+        {
+            switch (def.id)
+            {
+                case "mausoleum": // hides near rocks; tiny up-squeaks
+                    Personality(def, HabitatPreference.Rocks, 1.2f, 0.8f, 0.6f, 0.6f, 740f, 0.6f, 0.06f);
+                    break;
+                case "bansheep": // placid napper; low falling wail
+                    Personality(def, HabitatPreference.None, 1.5f, 1.0f, 0.8f, 0.3f, 300f, -0.4f, 0.16f);
+                    break;
+                case "wrabbit": // pond-side zoomies; quick rising squeak
+                    Personality(def, HabitatPreference.Water, 0.4f, 0.8f, 1.8f, 1.6f, 560f, 0.8f, 0.05f);
+                    break;
+                case "phantomoth": // orbits lights at night; thin high flutter
+                    Personality(def, HabitatPreference.LightsAtNight, 0.6f, 0.6f, 0.7f, 1.2f, 880f, 0.3f, 0.08f);
+                    break;
+                case "wailpertinger": // waterside wailer; low falling horn-note
+                    Personality(def, HabitatPreference.Water, 0.6f, 0.9f, 1.4f, 1.0f, 420f, -0.6f, 0.14f);
+                    break;
+                case "mothmaus": // lamplight lurker; small rising portent
+                    Personality(def, HabitatPreference.LightsAtNight, 0.8f, 0.7f, 0.8f, 1.0f, 820f, 0.5f, 0.07f);
+                    break;
+            }
+        }
+
+        private static void Personality(SpiritSpeciesDefinition def, HabitatPreference habitat,
+            float nap, float stretch, float hop, float leaf,
+            float pitch, float contour, float chirpSeconds)
+        {
+            def.habitatPreference = habitat;
+            def.napWeight = nap;
+            def.stretchWeight = stretch;
+            def.hopWeight = hop;
+            def.leafChaseWeight = leaf;
+            def.voiceBasePitch = pitch;
+            def.voiceContour = contour;
+            def.voiceChirpSeconds = chirpSeconds;
         }
 
         /// <summary>Slice 04: each species' authored final wish (skeleton text — owner rewrites).</summary>
@@ -271,21 +317,23 @@ namespace AnimalFarm.EditorTools
             }
             def.taskDescription = taskDesc;
             def.taskHint = taskHint;
+            ApplyPersonality(def);
             EditorUtility.SetDirty(def);
         }
 
         private static void GenerateRecipes()
         {
-            MakeRecipe("recipe_wailpertinger", "Wrabbit", "Bansheep", "Wailpertinger");
-            MakeRecipe("recipe_mothmaus", "Mausoleum", "Phantomoth", "Mothmaus");
+            MakeRecipe("recipe_wailpertinger", "Wrabbit", "Bansheep", "Wailpertinger", essenceCost: 6);
+            MakeRecipe("recipe_mothmaus", "Mausoleum", "Phantomoth", "Mothmaus", essenceCost: 6);
         }
 
-        private static void MakeRecipe(string assetName, string a, string b, string result)
+        private static void MakeRecipe(string assetName, string a, string b, string result, int essenceCost)
         {
             var recipe = GetOrCreate<WeaveRecipe>($"{SpiritDir}/{assetName}.asset");
             recipe.parentA = AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/{a}.asset");
             recipe.parentB = AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/{b}.asset");
             recipe.result = AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/{result}.asset");
+            recipe.essenceCost = essenceCost;
             EditorUtility.SetDirty(recipe);
         }
 

@@ -47,6 +47,7 @@ namespace AnimalFarm.EditorTools
 
             // terrain tiles (slice 02) — scrub is deliberately dull: barren→lush readout
             WriteNoiseRect("tile_scrub", 64, 64, new Color(0.38f, 0.37f, 0.26f), noise: 0.045f);
+            WriteNoiseRect("tile_locked", 64, 64, new Color(0.24f, 0.23f, 0.19f), noise: 0.05f); // unpurchased parcels
             WriteNoiseRect("tile_dirt", 64, 64, new Color(0.42f, 0.31f, 0.22f), noise: 0.04f);
             WriteNoiseRect("tile_grass", 64, 64, new Color(0.30f, 0.50f, 0.26f), noise: 0.035f);
             WriteNoiseRect("tile_water", 64, 64, new Color(0.22f, 0.38f, 0.55f), noise: 0.03f);
@@ -56,6 +57,10 @@ namespace AnimalFarm.EditorTools
             WriteSheepSpirit("bansheep_body", 40, new Color(0.92f, 0.90f, 0.86f));
             WriteRabbitSpirit("wrabbit_body", 36, new Color(0.72f, 0.86f, 0.78f));
             WriteMothSpirit("phantomoth_body", 36, new Color(0.70f, 0.62f, 0.82f));
+
+            // weeds + watchlight (absence pressure)
+            WriteTuft("weed_thistle", 26, new Color(0.40f, 0.26f, 0.45f)); // sour purple thistle
+            WriteFencePost("watchlight_post", 14, 44, new Color(0.40f, 0.34f, 0.30f));
 
             // the Repo-man + holding office (slice 07)
             WriteRepoMan("repoman_body", 44);

@@ -17,11 +17,19 @@ namespace AnimalFarm.UI
     /// </summary>
     public class ToolbeltUI : MonoBehaviour
     {
+        private const float FollowPixelsUp = 90f;   // bar floats this far above the shepherd
+        private const float GrowSeconds = 0.15f;    // 0.4 -> 1.06
+        private const float SettleSeconds = 0.07f;  // 1.06 -> 1.0 (total ~0.22s)
+        private const float StartScale = 0.4f;
+        private const float OvershootScale = 1.06f;
+
         private GameObject _panel;
         private RectTransform _panelRt;
         private readonly List<Button> _buttons = new List<Button>();
 
         private ToolController _tools;
+        private Transform _shepherd;
+        private float _animTime;
         private bool _open;
         private bool _inputSubscribed;
 
@@ -45,7 +53,11 @@ namespace AnimalFarm.UI
                 TryBindController();
 
             if (_open)
+            {
                 PollNumberKeys();
+                FollowShepherd();
+                TickOpenAnimation();
+            }
         }
 
         private void OnDestroy()
@@ -93,6 +105,12 @@ namespace AnimalFarm.UI
             RebuildButtons();
             _panel.SetActive(true);
             _open = true;
+
+            // Grow-and-settle entrance, anchored over the shepherd.
+            _animTime = 0f;
+            _panelRt.localScale = new Vector3(StartScale, StartScale, 1f);
+            FollowShepherd();
+
             AnimalFarm.Core.UIInputLock.ModalOpen = true;
 
             if (GameInput.Instance != null)
@@ -137,6 +155,49 @@ namespace AnimalFarm.UI
             }
         }
 
+        // ---- over-the-shepherd placement + entrance ---------------------------
+
+        /// <summary>Keeps the bar hovering ~90 px above the shepherd while open.
+        /// Overlay canvas, so the camera param to the rect conversion is null.</summary>
+        private void FollowShepherd()
+        {
+            if (_panelRt == null) return;
+
+            if (_shepherd == null)
+            {
+                var player = GameObject.FindWithTag("Player");
+                if (player != null) _shepherd = player.transform;
+            }
+
+            var cam = Camera.main;
+            if (_shepherd == null || cam == null) return;
+
+            Vector3 screen = cam.WorldToScreenPoint(_shepherd.position);
+            screen.y += FollowPixelsUp;
+
+            var root = UIRoot.GetRoot();
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    root, screen, null, out Vector2 local))
+                _panelRt.anchoredPosition = local;
+        }
+
+        /// <summary>Two-phase unscaled-time pop: 0.4 -> 1.06 -> 1.0 over ~0.22s.</summary>
+        private void TickOpenAnimation()
+        {
+            if (_panelRt == null) return;
+
+            _animTime += Time.unscaledDeltaTime;
+            float s;
+            if (_animTime < GrowSeconds)
+                s = Mathf.Lerp(StartScale, OvershootScale, _animTime / GrowSeconds);
+            else if (_animTime < GrowSeconds + SettleSeconds)
+                s = Mathf.Lerp(OvershootScale, 1f, (_animTime - GrowSeconds) / SettleSeconds);
+            else
+                s = 1f;
+
+            _panelRt.localScale = new Vector3(s, s, 1f);
+        }
+
         // ------------------------------------------------------------------ UI
 
         private void BuildPanel()
@@ -146,11 +207,14 @@ namespace AnimalFarm.UI
             _panel = new GameObject("ToolbeltUI");
             _panelRt = _panel.AddComponent<RectTransform>();
             _panelRt.SetParent(root, false);
-            _panelRt.anchorMin = new Vector2(0.5f, 0f);
-            _panelRt.anchorMax = new Vector2(0.5f, 0f);
+            // Center anchors so anchoredPosition can track the shepherd's
+            // screen position; pivot at bottom-center so the bar grows upward
+            // from just above the shepherd's head.
+            _panelRt.anchorMin = new Vector2(0.5f, 0.5f);
+            _panelRt.anchorMax = new Vector2(0.5f, 0.5f);
             _panelRt.pivot = new Vector2(0.5f, 0f);
-            _panelRt.anchoredPosition = new Vector2(0f, 64f); // clears the ToolHUD line
-            _panelRt.sizeDelta = new Vector2(200f, 76f);      // grows via ContentSizeFitter
+            _panelRt.anchoredPosition = Vector2.zero;    // repositioned on open
+            _panelRt.sizeDelta = new Vector2(200f, 76f); // grows via ContentSizeFitter
 
             var bg = _panel.AddComponent<Image>();
             UIStyle.ApplyPanel(bg, UIStyle.PanelBg);

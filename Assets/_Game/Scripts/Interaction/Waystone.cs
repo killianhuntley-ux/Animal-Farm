@@ -32,6 +32,29 @@ namespace AnimalFarm.Interaction
 
         public string PromptText => "Inspect";
 
+        /// <summary>
+        /// Runtime factory for the buildable Waystone. The SpriteRenderer MUST
+        /// be added (and filled) before AddComponent&lt;Waystone&gt;: AddComponent
+        /// runs Awake immediately, and Awake reads GetComponent&lt;SpriteRenderer&gt;.
+        /// Multiple waystones may coexist.
+        /// </summary>
+        public static Waystone Create(Vector3 pos, Sprite sprite, Material mat)
+        {
+            var go = new GameObject("Waystone");
+            go.transform.position = pos;
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            if (mat != null) sr.sharedMaterial = mat;
+
+            // Trigger volume for the InteractionSensor (matches the bootstrapped one).
+            var col = go.AddComponent<BoxCollider2D>();
+            col.isTrigger = true;
+            col.size = new Vector2(1.2f, 1.4f);
+
+            return go.AddComponent<Waystone>();
+        }
+
         private void Awake()
         {
             _renderer = GetComponent<SpriteRenderer>();

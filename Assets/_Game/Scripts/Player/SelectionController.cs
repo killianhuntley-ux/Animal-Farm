@@ -32,11 +32,14 @@ namespace AnimalFarm.Player
         private static readonly Color GhostInvalid = new Color(1f, 0.35f, 0.3f, 0.55f);
 
         /// <summary>True while a ghost mode owns the cursor (home move mode or
-        /// new-home placement mode) — tools stay suppressed either way.</summary>
-        public bool IsMoving => _movingHome != null || _placingSpecies != null;
+        /// placement mode) -- tools stay suppressed either way.</summary>
+        public bool IsMoving => _movingHome != null || _placing;
 
         private Home _movingHome;
-        private SpiritSpeciesDefinition _placingSpecies;
+        private bool _placing;
+        private System.Func<Vector2Int, bool> _placeValidate;
+        private System.Action<Vector2Int, Vector3> _placeOnPlace;
+        private System.Action _placeOnCancel;
         private SpriteRenderer _ghost;
 
         private void Awake()
@@ -59,7 +62,7 @@ namespace AnimalFarm.Player
                 return; // move mode suppresses normal selection clicks
             }
 
-            if (_placingSpecies != null)
+            if (_placing)
             {
                 UpdatePlaceMode();
                 return; // placement mode suppresses normal selection clicks
@@ -129,7 +132,7 @@ namespace AnimalFarm.Player
         {
             if (home == null) return;
             _movingHome = home;
-            _placingSpecies = null;
+            _placing = false; // move mode and placement mode are exclusive
 
             var menu = SelectionMenuUI.Instance;
             if (menu != null && menu.IsOpen) menu.Close();
@@ -149,8 +152,45 @@ namespace AnimalFarm.Player
         public void BeginPlaceHome(SpiritSpeciesDefinition species)
         {
             if (species == null || species.homeSprite == null) return;
+
+            // 2.2 matches HomeManager.Spawn's home scale.
+            BeginPlaceBuilding(species.homeSprite, 2.2f, null, (cell, world) =>
+            {
+                if (HomeManager.Instance == null) return;
+                var home = HomeManager.Instance.PlaceHome(species, cell);
+                if (home != null)
+                {
+                    FloatingText.Show(world, species.displayName + " home built", UIStyle.Gold);
+                    AnimalFarm.Core.ShepherdProgress.Grant("build");
+                    AnimalFarm.World.VendorArrivals.Note("buildsPlaced"); // hidden vendor move-in milestone
+                }
+            });
+        }
+
+        /// <summary>
+        /// Generalized ghost placement mode (homes AND structures). The ghost
+        /// follows the cursor cell by cell showing green/red validity; left
+        /// click on a valid cell fires <paramref name="onPlace"/> ONCE and
+        /// exits; right click (or a missing camera/grid) cancels and fires
+        /// <paramref name="onCancel"/> (refund hook). A null
+        /// <paramref name="validate"/> uses the default placeability rule.
+        /// </summary>
+        public void BeginPlaceBuilding(Sprite ghostSprite, float scale,
+            System.Func<Vector2Int, bool> validate,
+            System.Action<Vector2Int, Vector3> onPlace,
+            System.Action onCancel = null)
+        {
+            if (ghostSprite == null || onPlace == null)
+            {
+                onCancel?.Invoke();
+                return;
+            }
+
             _movingHome = null;
-            _placingSpecies = species;
+            _placing = true;
+            _placeValidate = validate;
+            _placeOnPlace = onPlace;
+            _placeOnCancel = onCancel;
 
             var menu = SelectionMenuUI.Instance;
             if (menu != null && menu.IsOpen) menu.Close();
@@ -166,8 +206,7 @@ namespace AnimalFarm.Player
                 pos.z = 0f;
             }
 
-            // 2.2 matches HomeManager.Spawn's home scale.
-            StartGhost(species.homeSprite, new Vector3(2.2f, 2.2f, 1f), pos);
+            StartGhost(ghostSprite, new Vector3(scale, scale, 1f), pos);
         }
 
         private void UpdatePlaceMode()
@@ -175,16 +214,15 @@ namespace AnimalFarm.Player
             var grid = TerrainGrid.Instance;
             var mouse = Mouse.current;
             var cam = Camera.main;
-            if (_placingSpecies == null || grid == null || mouse == null || cam == null
-                || HomeManager.Instance == null)
+            if (!_placing || grid == null || mouse == null || cam == null)
             {
-                ExitPlaceMode();
+                CancelPlaceMode();
                 return;
             }
 
             if (mouse.rightButton.wasPressedThisFrame)
             {
-                ExitPlaceMode(); // cancel
+                CancelPlaceMode(); // cancel (fires the refund hook, if any)
                 return;
             }
 
@@ -193,7 +231,8 @@ namespace AnimalFarm.Player
             worldPos.z = 0f;
 
             bool inBounds = grid.TryWorldToCell(worldPos, out Vector2Int cell);
-            bool valid = inBounds && IsCellPlaceable(grid, cell);
+            bool valid = inBounds
+                && (_placeValidate != null ? _placeValidate(cell) : IsCellPlaceable(grid, cell));
 
             if (_ghost != null)
             {
@@ -210,18 +249,26 @@ namespace AnimalFarm.Player
             if (!valid) return;
 
             ConsumedClickFrame = Time.frameCount;
-            var species = _placingSpecies;
+            var onPlace = _placeOnPlace;
+            Vector3 center = grid.CellCenterWorld(cell);
             ExitPlaceMode(); // one placement per trip through the build menu
+            onPlace?.Invoke(cell, center);
+        }
 
-            var home = HomeManager.Instance.PlaceHome(species, cell);
-            if (home != null)
-                FloatingText.Show(grid.CellCenterWorld(cell),
-                    species.displayName + " home built", UIStyle.Gold);
+        /// <summary>Cancel path: tears the mode down, THEN fires the refund hook.</summary>
+        private void CancelPlaceMode()
+        {
+            var onCancel = _placeOnCancel;
+            ExitPlaceMode();
+            onCancel?.Invoke();
         }
 
         private void ExitPlaceMode()
         {
-            _placingSpecies = null;
+            _placing = false;
+            _placeValidate = null;
+            _placeOnPlace = null;
+            _placeOnCancel = null;
             DestroyGhost();
         }
 
@@ -268,6 +315,11 @@ namespace AnimalFarm.Player
             _movingHome.MoveTo(cell, grid.CellCenterWorld(cell));
             ExitMoveMode();
         }
+
+        /// <summary>Default placement rule, exposed for the build menu's
+        /// structure rows: usable land, not water, no plant, no home.</summary>
+        public static bool IsPlaceableCell(Vector2Int cell) =>
+            IsCellPlaceable(TerrainGrid.Instance, cell);
 
         private static bool IsCellPlaceable(TerrainGrid grid, Vector2Int cell)
         {

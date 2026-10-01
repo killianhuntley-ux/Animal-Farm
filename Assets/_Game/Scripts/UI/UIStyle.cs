@@ -78,6 +78,8 @@ namespace AnimalFarm.UI
             button.targetGraphic = img;
             StyleButton(button, bg);
             if (onClick != null) button.onClick.AddListener(onClick);
+            // Every styled button clicks softly (BleepKind is namespace-level in AnimalFarm.Core).
+            button.onClick.AddListener(() => AnimalFarm.Core.Bleeps.Play(AnimalFarm.Core.BleepKind.Click, 0.5f));
 
             var text = UIRoot.MakeText(rt, "Label", fontSize, TextAnchor.MiddleCenter, Cream);
             text.text = label;

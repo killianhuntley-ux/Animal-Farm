@@ -123,18 +123,29 @@ namespace AnimalFarm.UI
                 return;
             }
 
+            // Essence toll (owner decision): the ritual consumes essence.
+            int have = AnimalFarm.Core.Inventory.Instance != null
+                ? AnimalFarm.Core.Inventory.Instance.Count("essence") : 0;
+            string toll = $"  [toll: {recipe.essenceCost} essence, have {have}]";
+            if (have < recipe.essenceCost)
+            {
+                text = "The loom demands more essence." + toll;
+                color = UIStyle.Danger;
+                return;
+            }
+
             canWeave = true;
             if (SpiritManager.Instance.GetDiscovery(recipe.result.id)
                 == SpiritManager.DiscoveryLevel.Unseen)
             {
-                text = "Something stirs on the loom...";
+                text = "Something stirs on the loom..." + toll;
                 color = UIStyle.Grey;
             }
             else
             {
-                text = !string.IsNullOrEmpty(recipe.result.displayName)
+                text = (!string.IsNullOrEmpty(recipe.result.displayName)
                     ? recipe.result.displayName
-                    : recipe.result.id;
+                    : recipe.result.id) + toll;
                 color = UIStyle.Gold;
             }
         }

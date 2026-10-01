@@ -518,7 +518,7 @@ namespace AnimalFarm.UI
                         Color lineColor = Cream;
                         if (agent.IsFulfilled)
                         {
-                            line += " (FULFILLED - guide them to the altar!)";
+                            line += " (FULFILLED - lead them to the Ascension Pad!)";
                             lineColor = Gold;
                         }
                         else if (agent.IsFollowing)

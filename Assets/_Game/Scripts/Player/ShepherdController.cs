@@ -23,6 +23,9 @@ namespace AnimalFarm.Player
         /// <summary>True while the shepherd is actually moving.</summary>
         public bool IsMoving => Velocity.sqrMagnitude > 0.01f;
 
+        /// <summary>True while sprint is held and the shepherd is moving.</summary>
+        public bool IsSprinting => _sprintHeld && IsMoving;
+
         /// <summary>Last non-zero input direction (normalized). Defaults to down (toward camera).</summary>
         public Vector2 FacingDir { get; private set; } = Vector2.down;
 
@@ -50,6 +53,15 @@ namespace AnimalFarm.Player
                 _moveInput.Normalize();
 
             _sprintHeld = input.SprintHeld;
+
+            // A weighty tool action commits the shepherd in place for the
+            // beat (muscle 01) -- ignore movement until the swing releases.
+            if (ToolController.MovementLocked)
+            {
+                _moveInput = Vector2.zero;
+                _sprintHeld = false;
+                return; // facing stays pinned on the swing target too
+            }
 
             if (_moveInput.sqrMagnitude > 0.0001f)
                 FacingDir = _moveInput.normalized;

@@ -81,14 +81,15 @@ namespace AnimalFarm.World
         public Plant PlantSeed(PlantSpecies s, Vector2Int cell)
         {
             if (s == null || HasPlantAt(cell)) return null;
+            if (VillainHoles.BlocksCell(cell)) return null;
             if (TerrainGrid.Instance == null || TerrainGrid.Instance.GetSurface(cell) != s.requiredSurface)
                 return null;
 
             float now = GameClock.Instance != null ? GameClock.Instance.TotalHours : 0f;
-            return Spawn(s, cell, now);
+            return Spawn(s, cell, now, 0f);
         }
 
-        private Plant Spawn(PlantSpecies s, Vector2Int cell, float plantedAtTotalHours)
+        private Plant Spawn(PlantSpecies s, Vector2Int cell, float plantedAtTotalHours, float growthHours)
         {
             var go = new GameObject("Plant_" + s.id);
 
@@ -101,7 +102,7 @@ namespace AnimalFarm.World
             collider.radius = 0.4f;
 
             var plant = go.AddComponent<Plant>();
-            plant.Init(s, cell, plantedAtTotalHours);
+            plant.Init(s, cell, plantedAtTotalHours, growthHours);
 
             _plants.Add(plant);
             _byCell[cell] = plant;
@@ -139,6 +140,7 @@ namespace AnimalFarm.World
             public string speciesId;
             public int cx, cy;
             public float plantedAt;
+            public float growthHours; // accumulated effective growth (0 in old saves)
         }
 
         [Serializable]
@@ -161,7 +163,8 @@ namespace AnimalFarm.World
                     speciesId = p.Species.id,
                     cx = p.Cell.x,
                     cy = p.Cell.y,
-                    plantedAt = p.PlantedAtTotalHours
+                    plantedAt = p.PlantedAtTotalHours,
+                    growthHours = p.GrowthHours
                 });
             }
             return JsonUtility.ToJson(state);
@@ -194,7 +197,17 @@ namespace AnimalFarm.World
 
                 var cell = new Vector2Int(record.cx, record.cy);
                 if (_byCell.ContainsKey(cell)) continue;
-                Spawn(species, cell, record.plantedAt);
+
+                // OLD-SAVE MIGRATION: records written before watered growth
+                // carry no growthHours (JsonUtility default 0). Seed progress
+                // from elapsed time since planting — the old full-speed
+                // derivation — so loading never sets anyone's crops back.
+                float growthHours = record.growthHours;
+                float now = GameClock.Instance != null ? GameClock.Instance.TotalHours : record.plantedAt;
+                if (growthHours == 0f && record.plantedAt < now)
+                    growthHours = now - record.plantedAt;
+
+                Spawn(species, cell, record.plantedAt, growthHours);
             }
         }
     }

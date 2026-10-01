@@ -14,4 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   body: {fileID: 3792278354558073419, guid: 96d26990e0003594bb3796713c782abf, type: 3}
   head: {fileID: 8171817715479770135, guid: 666b524a3c5e42546b6f095fbd487e40, type: 3}
+  bodyUp: {fileID: 0}
+  headUp: {fileID: 0}
+  bodyDown: {fileID: 0}
+  headDown: {fileID: 0}
   tint: {r: 1, g: 1, b: 1, a: 1}

@@ -71,9 +71,21 @@ namespace AnimalFarm.UI
                 return;
             }
 
-            var sb = new StringBuilder("Pouch:\n");
-            foreach (var kv in items)
-                sb.Append("  ").Append(kv.Key).Append(" x").Append(kv.Value).Append('\n');
+            // Coins pinned first, on their own line (slice 09 economy).
+            var sb = new StringBuilder();
+            int coins = Inventory.Instance.Count("coin");
+            if (coins > 0) sb.Append("Obols: ").Append(coins).Append('\n'); // the ferryman's toll
+
+            bool hasPouchItems = items.Count > (coins > 0 ? 1 : 0);
+            if (hasPouchItems)
+            {
+                sb.Append("Pouch:\n");
+                foreach (var kv in items)
+                {
+                    if (kv.Key == "coin") continue; // rendered above
+                    sb.Append("  ").Append(kv.Key).Append(" x").Append(kv.Value).Append('\n');
+                }
+            }
             _text.text = sb.ToString();
             if (_panel != null) _panel.SetActive(true);
         }

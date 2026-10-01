@@ -14,6 +14,9 @@ namespace AnimalFarm.Spirits
         public SpiritSpeciesDefinition parentB;
         public SpiritSpeciesDefinition result;
 
+        [Tooltip("Essence consumed by the ritual (owner decision: essence is the weave currency; deeper weaves cost more).")]
+        public int essenceCost = 6;
+
         public bool Matches(SpiritSpeciesDefinition x, SpiritSpeciesDefinition y)
         {
             if (x == null || y == null || parentA == null || parentB == null) return false;

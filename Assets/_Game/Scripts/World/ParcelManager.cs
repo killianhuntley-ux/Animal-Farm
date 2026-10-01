@@ -9,63 +9,123 @@ using UnityEngine;
 namespace AnimalFarm.World
 {
     /// <summary>
-    /// Land expansion (slice 08 core): purchasable PARCELS -- fenced annex
-    /// fields attached to the farm's north side. Each locked parcel shows a
-    /// gate sign on the farm's north fence line; paying its produce cost
-    /// opens the wall segment behind it and builds the parcel's ground,
-    /// fence, and containment walls at runtime (mirroring the greybox style
-    /// of SceneBootstrapper, which we cannot run at play time).
+    /// Land ownership (muscle 02/08 world restructure). The world is PARCELS
+    /// grouped into BASES (parcel clusters -- the biome unit for BiomeScorer):
     ///
-    /// ==================== TECH DEBT (slice 08b) ====================
-    /// slice 08b: extend TerrainGrid to parcels.
-    /// TerrainGrid is a FIXED 40x26 array covering the core farm only and is
-    /// NOT resized here. A purchased parcel is VISUAL + TRAVERSAL land only
-    /// (own tiled ground sprite + fence + wall removal) -- it is NOT tillable
-    /// terrain yet. Farming stays inside the core field until 08b.
-    /// ===============================================================
+    ///   - HOME base: a 3x3 cluster of 10x8 fields. The centre field is owned
+    ///     from the start; the other eight are bought one at a time at the
+    ///     Ferryman's Land Office. The whole cluster sits inside ONE perimeter
+    ///     fence (built by SceneBootstrapper), so locked fields are walkable
+    ///     but refuse tools -- TerrainGrid draws them dimmed until bought.
+    ///     The data model is cluster-agnostic (name + rect + baseId), so the
+    ///     4x4 expansion later is just more list entries.
+    ///   - WEST ROAD RIGHTS: not land but passage -- buying it tears down the
+    ///     physical gate bar in the cluster's west fence, opening the dressed
+    ///     road corridor to the swamp. Road cells stay usable=false forever.
+    ///   - SWAMP base ("Reedmire"): a 2x2 satellite cluster at the road's far
+    ///     end, bought parcel by parcel AFTER road rights (prereqIndex).
     ///
-    /// Wall-removal contract: SceneBootstrapper builds the farm's north
-    /// bounds wall in two NAMED halves, "NorthWall_P0" (west, x[-20,0]) and
-    /// "NorthWall_P1" (east, x[0,20]). Unlock destroys the matching half by
-    /// name -- null-safe, because on a load-restore (or a stale scene that
-    /// predates the split) the object may already be gone or never existed.
-    /// As a belt to that suspender, each LOCKED parcel also spawns its own
-    /// runtime blocker collider across its south edge, so containment never
-    /// depends on the scene file's wall naming alone.
+    /// Locked parcels show an info-only sign (ParcelGate) that points at the
+    /// Land Office. Unlock flips the parcel's TerrainGrid cells usable; no
+    /// runtime fences are built any more -- cluster perimeters come from the
+    /// bootstrapper, and the old named-north-wall contract is retired.
+    /// CameraFollow clamps to <see cref="OwnedBoundsWorld"/>.
     /// </summary>
     public class ParcelManager : MonoBehaviour, ISaveable
     {
         public static ParcelManager Instance { get; private set; }
 
+        /// <summary>Base (parcel-cluster) ids -- the biome unit (BiomeScorer).</summary>
+        public const int HomeBaseId = 0;
+        public const int SwampBaseId = 1;
+
         [Header("Art (assigned by the bootstrapper)")]
         [SerializeField] private Material spriteMaterial;
-        [SerializeField] private Sprite groundSprite;
-        [SerializeField] private Sprite fencePostSprite;
         [SerializeField] private Sprite whiteRect;
 
-        private const float FencePostSpacing = 1.6f;
-        private const float RailThickness = 0.12f;
+        [Header("Camera bounds")]
+        [Tooltip("World region always inside the camera clamp (the town plaza).")]
+        [SerializeField] private Rect alwaysInCameraBounds = Rect.MinMaxRect(15f, -7.5f, 37.5f, 7.5f);
+
         private static readonly Color WoodBrown = new Color(0.42f, 0.31f, 0.22f);
 
-        /// <summary>One annex field. Hardcoded this slice; data-driven later.</summary>
+        // ---- world geometry. Parcels are authored HERE; the matching fences,
+        // walls and TerrainGrid zoning live in SceneBootstrapper -- keep the
+        // two in step when the map changes. ---------------------------------
+        private const float ParcelW = 10f, ParcelH = 8f;
+        private static readonly Vector2 HomeOrigin = new Vector2(-15f, -12f);  // 3x3 cluster -> x[-15,15] y[-12,12]
+        private static readonly Vector2 SwampOrigin = new Vector2(-47f, -8f);  // 2x2 cluster -> x[-47,-27] y[-8,8]
+        private static readonly Rect RoadRect = Rect.MinMaxRect(-27f, -2f, -15f, 2f);
+        // Road rights also hand the camera clamp the whole swamp enclosure --
+        // you can WALK the mire before you own an inch of it.
+        private static readonly Rect RoadRevealRect = Rect.MinMaxRect(-48f, -9f, -15f, 9f);
+
+        private enum ParcelKind : byte { Field, Road }
+
+        /// <summary>One purchasable thing at the Land Office: a field or a road right.</summary>
         private class Parcel
         {
             public string name;
-            public Rect rect;        // world-space area (farm is x[-20,20], y[-13,13])
-            public string costItemId;
-            public int costCount;
-            public Color groundTint;
+            public ParcelKind kind;
+            public int baseId;           // HomeBaseId / SwampBaseId; -1 for road rights
+            public Rect rect;            // world-space area (field ground / road corridor)
+            public Rect revealRect;      // area the camera clamp gains when unlocked
+            public int coinCost;         // obols -- the ferryman's toll
+            public string blurb;         // flavor line for the Land Office overview
+            public int prereqIndex = -1; // parcel that must be owned first (-1 = none)
+            public Vector3 signPos;      // where the gate sign stands while locked
             public bool unlocked;
-            public GameObject gate;     // sign + label + trigger while locked
-            public GameObject blocker;  // runtime south-edge collider while locked
+            public GameObject gate;      // sign + label + trigger while locked
+            public GameObject blocker;   // physical gate-bar collider while locked (road only)
         }
 
         private readonly List<Parcel> _parcels = new List<Parcel>();
+        private int _roadIndex = -1;
+
+        /// <summary>Fired after any unlock (purchase, debug, or save restore).</summary>
+        public event Action OnOwnershipChanged;
+
+        private Rect _ownedBounds;
+        private bool _boundsDirty = true;
 
         public int ParcelCount => _parcels.Count;
 
         public bool IsUnlocked(int index) =>
             index >= 0 && index < _parcels.Count && _parcels[index].unlocked;
+
+        /// <summary>Read-only snapshot of one parcel for the Land Office UI.</summary>
+        public struct ParcelInfo
+        {
+            public int index;
+            public string name;
+            public bool unlocked;
+            public int coinCost;
+            public Vector2 size;
+            public string blurb;
+        }
+
+        /// <summary>Snapshot for the UI; index -1 if <paramref name="i"/> is out of range.</summary>
+        public ParcelInfo GetInfo(int i)
+        {
+            if (i < 0 || i >= _parcels.Count) return new ParcelInfo { index = -1 };
+            var p = _parcels[i];
+
+            // Surface the prerequisite in the blurb -- the Land Office row
+            // renders blurbs verbatim, so this is the player's one warning.
+            string blurb = p.blurb;
+            if (!p.unlocked && p.prereqIndex >= 0 && !_parcels[p.prereqIndex].unlocked)
+                blurb += " [needs " + _parcels[p.prereqIndex].name + "]";
+
+            return new ParcelInfo
+            {
+                index = i,
+                name = p.name,
+                unlocked = p.unlocked,
+                coinCost = p.coinCost,
+                size = p.rect.size,
+                blurb = blurb
+            };
+        }
 
         // ---- lifecycle --------------------------------------------------------
 
@@ -74,31 +134,15 @@ namespace AnimalFarm.World
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
 
-            // Costs are produce this slice: coins arrive with the economy slice;
-            // produce is the proto-currency.
-            _parcels.Add(new Parcel
-            {
-                name = "North Meadow",
-                rect = Rect.MinMaxRect(-20f, 13f, 0f, 25f),
-                costItemId = "wheat",
-                costCount = 6,
-                groundTint = new Color(0.62f, 0.75f, 0.50f) // meadow greenish
-            });
-            _parcels.Add(new Parcel
-            {
-                name = "North Rise",
-                rect = Rect.MinMaxRect(0f, 13f, 20f, 25f),
-                costItemId = "berry",
-                costCount = 10,
-                groundTint = new Color(0.80f, 0.71f, 0.53f) // dusty rise
-            });
+            BuildParcelList();
 
             // Build locked-state scaffolding in Awake so it exists before
             // SaveSystem.Start() calls Restore() on load.
             for (int i = 0; i < _parcels.Count; i++)
             {
+                if (_parcels[i].unlocked) continue;
                 BuildGate(i);
-                BuildBlocker(i);
+                if (_parcels[i].kind == ParcelKind.Road) BuildRoadBlocker(i);
             }
         }
 
@@ -107,34 +151,112 @@ namespace AnimalFarm.World
             if (Instance == this) Instance = null;
         }
 
+        /// <summary>All deeds on the Ferryman's books. Costs are obols; they
+        /// climb with distance from the hearth, and the mire costs mire money.</summary>
+        private void BuildParcelList()
+        {
+            // -- home cluster: 3x3 fields, centre owned from the first breath.
+            Field("Hearth Field", 1, 1, 0, HomeBaseId, HomeOrigin,
+                "Where you started. The soil already answers to you.", startOwned: true);
+            Field("West Field", 0, 1, 120, HomeBaseId, HomeOrigin,
+                "The road side. Buy toward the mire and the mire comes closer.");
+            Field("North Field", 1, 2, 140, HomeBaseId, HomeOrigin,
+                "Soft ground. The grass remembers being walked on.");
+            Field("East Field", 2, 1, 150, HomeBaseId, HomeOrigin,
+                "Town noise carries over this fence. Spirits pretend not to listen.");
+            Field("South Field", 1, 0, 160, HomeBaseId, HomeOrigin,
+                "Low and quiet. Things pool here: water, mist, memory.");
+            Field("Northwest Field", 0, 2, 220, HomeBaseId, HomeOrigin,
+                "A corner the wind argues over.");
+            Field("Northeast Field", 2, 2, 240, HomeBaseId, HomeOrigin,
+                "Morning light lands here first.");
+            Field("Southwest Field", 0, 0, 260, HomeBaseId, HomeOrigin,
+                "Stubborn scrub. It will hold a grudge, then hold seed.");
+            Field("Southeast Field", 2, 0, 280, HomeBaseId, HomeOrigin,
+                "The far corner. Good bones under bad weeds.");
+
+            // -- road rights: opens the west gate and the corridor to the mire.
+            _roadIndex = _parcels.Count;
+            _parcels.Add(new Parcel
+            {
+                name = "West Road Rights",
+                kind = ParcelKind.Road,
+                baseId = -1,
+                rect = RoadRect,
+                revealRect = RoadRevealRect,
+                coinCost = 200,
+                blurb = "Passage west to Reedmire. The Ferryman tolls land as readily as water.",
+                signPos = new Vector3(-13.4f, 0f, 0f) // just inside the cluster's west gate
+            });
+
+            // -- swamp satellite: 2x2 fields past the road, bought one by one.
+            Field("Reedmire Hollow", 0, 1, 240, SwampBaseId, SwampOrigin,
+                "Murky ground, already pooling. Reeds would approve.", prereq: _roadIndex);
+            Field("Reedmire Bank", 1, 1, 260, SwampBaseId, SwampOrigin,
+                "The drier lip of the mire. Relatively speaking.", prereq: _roadIndex);
+            Field("Reedmire Shallows", 0, 0, 280, SwampBaseId, SwampOrigin,
+                "Standing water with opinions.", prereq: _roadIndex);
+            Field("Reedmire Deep", 1, 0, 300, SwampBaseId, SwampOrigin,
+                "The mire keeps its secrets here. Buy them.", prereq: _roadIndex);
+        }
+
+        private void Field(string name, int col, int row, int cost, int baseId, Vector2 origin,
+            string blurb, bool startOwned = false, int prereq = -1)
+        {
+            var rect = new Rect(origin.x + col * ParcelW, origin.y + row * ParcelH, ParcelW, ParcelH);
+            _parcels.Add(new Parcel
+            {
+                name = name,
+                kind = ParcelKind.Field,
+                baseId = baseId,
+                rect = rect,
+                revealRect = rect,
+                coinCost = cost,
+                blurb = blurb,
+                prereqIndex = prereq,
+                signPos = new Vector3(rect.center.x, rect.center.y, 0f),
+                unlocked = startOwned
+            });
+        }
+
         // ---- purchase / unlock ------------------------------------------------
 
-        private static string CostText(Parcel p) => p.costCount + "x " + p.costItemId;
-
-        /// <summary>Charges the parcel's produce cost; on success, opens it.</summary>
+        /// <summary>Charges the parcel's coin cost (obols); on success, opens it.</summary>
         public bool TryPurchase(int index)
         {
             if (index < 0 || index >= _parcels.Count) return false;
             var p = _parcels[index];
             if (p.unlocked) return false;
 
-            // Capture the popup anchor before Unlock destroys the gate.
-            Vector3 pos = p.gate != null
-                ? p.gate.transform.position + Vector3.up * 0.8f
-                : new Vector3(p.rect.center.x, p.rect.yMin + 0.8f, 0f);
+            Vector3 pos = PopupAnchor(p);
 
-            if (Inventory.Instance == null || !Inventory.Instance.Consume(p.costItemId, p.costCount))
+            if (p.prereqIndex >= 0 && !_parcels[p.prereqIndex].unlocked)
             {
-                FloatingText.Show(pos, "(needs " + CostText(p) + ")", UIStyle.Grey);
+                FloatingText.Show(pos, "(needs " + _parcels[p.prereqIndex].name + ")", UIStyle.Grey);
+                return false;
+            }
+
+            if (Inventory.Instance == null || !Inventory.Instance.Consume("coin", p.coinCost))
+            {
+                FloatingText.Show(pos, "(needs " + p.coinCost + " obols)", UIStyle.Grey);
                 return false;
             }
 
             Unlock(index);
-            FloatingText.Show(pos, p.name + " opened!", UIStyle.Gold);
+            FloatingText.Show(pos, p.name + (p.kind == ParcelKind.Road ? " granted!" : " opened!"), UIStyle.Gold);
             return true;
         }
 
-        /// <summary>Force-open a parcel with no cost (debug console: "parcel &lt;i&gt;").</summary>
+        /// <summary>Purchases happen at the Land Office, so float the text at
+        /// the player, not at a sign that may be half a map away.</summary>
+        private static Vector3 PopupAnchor(Parcel p)
+        {
+            var player = GameObject.FindWithTag("Player");
+            if (player != null) return player.transform.position + Vector3.up * 0.8f;
+            return p.signPos + Vector3.up * 0.8f;
+        }
+
+        /// <summary>Force-open a parcel with no cost or prereq (debug console: "parcel &lt;i&gt;").</summary>
         public bool Debug_Unlock(int index)
         {
             if (index < 0 || index >= _parcels.Count || _parcels[index].unlocked) return false;
@@ -143,9 +265,10 @@ namespace AnimalFarm.World
         }
 
         /// <summary>
-        /// Opens a parcel WITHOUT charging (callers charge): removes the farm's
-        /// north-wall segment + our blocker, builds the annex visuals and its
-        /// containment walls, and retires the gate sign. One-way this slice.
+        /// Opens a parcel WITHOUT charging (callers charge). Fields become real
+        /// terrain (usable cells); road rights only tear down the gate bar --
+        /// the corridor's cells stay usable=false (dressed, walkable, untillable).
+        /// One-way this slice.
         /// </summary>
         private void Unlock(int index)
         {
@@ -154,31 +277,91 @@ namespace AnimalFarm.World
             if (p.unlocked) return;
             p.unlocked = true;
 
-            // (1) Open the south edge: destroy our runtime blocker and the
-            // bootstrapper's named wall half. Both null-safe -- the named wall
-            // is already gone on a save-load re-apply, and may not exist at
-            // all in a scene built before the north wall was split.
             if (p.blocker != null) { Destroy(p.blocker); p.blocker = null; }
-            var bootstrapWall = GameObject.Find("NorthWall_P" + index);
-            if (bootstrapWall != null) Destroy(bootstrapWall);
-
-            // (2) Ground, fence, and containment for the annex.
-            BuildParcelField(index, p);
-
-            // (3) The gate has done its job.
             if (p.gate != null) { Destroy(p.gate); p.gate = null; }
+
+            if (p.kind == ParcelKind.Field && TerrainGrid.Instance != null
+                && TerrainGrid.Instance.TryWorldToCell(
+                    new Vector3(p.rect.xMin + 0.5f, p.rect.yMin + 0.5f), out var min)
+                && TerrainGrid.Instance.TryWorldToCell(
+                    new Vector3(p.rect.xMax - 0.5f, p.rect.yMax - 0.5f), out var max))
+            {
+                TerrainGrid.Instance.SetUsable(
+                    new RectInt(min.x, min.y, max.x - min.x + 1, max.y - min.y + 1), true);
+            }
+
+            _boundsDirty = true;
+            OnOwnershipChanged?.Invoke();
+        }
+
+        // ---- camera bounds ------------------------------------------------------
+
+        /// <summary>
+        /// Bounding box of everywhere the camera may roam: owned parcel rects,
+        /// the reveal of any opened road (corridor + its satellite enclosure),
+        /// and the town plaza (always reachable through the east gate).
+        /// CameraFollow clamps to this plus its own margin, and the box grows
+        /// the moment a purchase lands (OnOwnershipChanged fires after).
+        /// </summary>
+        public Rect OwnedBoundsWorld
+        {
+            get
+            {
+                if (_boundsDirty) RecomputeOwnedBounds();
+                return _ownedBounds;
+            }
+        }
+
+        private void RecomputeOwnedBounds()
+        {
+            _boundsDirty = false;
+            float xMin = alwaysInCameraBounds.xMin, xMax = alwaysInCameraBounds.xMax;
+            float yMin = alwaysInCameraBounds.yMin, yMax = alwaysInCameraBounds.yMax;
+            for (int i = 0; i < _parcels.Count; i++)
+            {
+                if (!_parcels[i].unlocked) continue;
+                var r = _parcels[i].revealRect;
+                if (r.xMin < xMin) xMin = r.xMin;
+                if (r.xMax > xMax) xMax = r.xMax;
+                if (r.yMin < yMin) yMin = r.yMin;
+                if (r.yMax > yMax) yMax = r.yMax;
+            }
+            _ownedBounds = Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        // ---- base queries (BiomeScorer) ----------------------------------------
+
+        /// <summary>Number of bases (parcel clusters) in the world.</summary>
+        public int BaseCount => 2;
+
+        /// <summary>
+        /// World rects of every FIELD parcel in a base, owned or not -- callers
+        /// (BiomeScorer) filter by TerrainGrid.IsUsable, so locked land never
+        /// skews a census. Clears <paramref name="into"/> first.
+        /// </summary>
+        public void GetBaseParcelRects(int baseId, List<Rect> into)
+        {
+            if (into == null) return;
+            into.Clear();
+            for (int i = 0; i < _parcels.Count; i++)
+            {
+                if (_parcels[i].kind != ParcelKind.Field) continue;
+                if (_parcels[i].baseId == baseId) into.Add(_parcels[i].rect);
+            }
         }
 
         // ---- construction -----------------------------------------------------
 
-        /// <summary>Sign + label + interaction trigger on the north fence line.</summary>
+        /// <summary>Sign + label + interaction trigger. Field signs stand at the
+        /// parcel's centre (locked cluster land is walkable); the road sign
+        /// stands just inside the gate it would open.</summary>
         private void BuildGate(int index)
         {
             var p = _parcels[index];
 
             var gate = new GameObject("ParcelGate_" + index);
             gate.transform.SetParent(transform, false);
-            gate.transform.position = new Vector3(p.rect.center.x, p.rect.yMin, 0f);
+            gate.transform.position = p.signPos;
 
             // Small wooden sign (tinted white rect).
             var sign = new GameObject("Sign");
@@ -190,116 +373,45 @@ namespace AnimalFarm.World
             sr.sortingOrder = 21; // just above the fence posts (20)
             if (spriteMaterial != null) sr.sharedMaterial = spriteMaterial;
 
-            WorldLabel.Attach(gate, p.name + "\n" + CostText(p) + " to open", -1.3f);
+            WorldLabel.Attach(gate, p.name + "\nSee the Ferryman", -1.3f);
 
-            // Trigger for the walk-up prompt and the click raycast. Reaches a
-            // little into the farm so the player can use it from inside.
+            // Trigger for the walk-up prompt and the click raycast.
             var col = gate.AddComponent<BoxCollider2D>();
             col.isTrigger = true;
             col.size = new Vector2(2.4f, 2.2f);
-            col.offset = new Vector2(0f, -0.4f);
 
             var gateComp = gate.AddComponent<ParcelGate>();
             gateComp.Init(this, index, sign.transform);
-            gateComp.SetTexts(p.name, "Open " + p.name + " (" + CostText(p) + ")");
+            gateComp.SetTexts(p.name, "About this land");
 
             p.gate = gate;
         }
 
         /// <summary>
-        /// Runtime collider sealing a LOCKED parcel's south edge. Redundant
-        /// with the bootstrapper's NorthWall_P halves on purpose -- see the
-        /// wall-removal contract in the class comment.
+        /// Physical bar sealing the home cluster's west gate until road rights
+        /// are bought: a collider across the fence gap plus a visible wooden
+        /// bar. Fields get no blockers -- locked cluster land is walkable.
         /// </summary>
-        private void BuildBlocker(int index)
+        private void BuildRoadBlocker(int index)
         {
             var p = _parcels[index];
 
-            var blocker = new GameObject("ParcelBlocker_" + index);
+            var blocker = new GameObject("RoadBlocker_" + index);
             blocker.transform.SetParent(transform, false);
-            blocker.transform.position = new Vector3(p.rect.center.x, p.rect.yMin + 0.5f, 0f);
-            blocker.AddComponent<BoxCollider2D>().size = new Vector2(p.rect.width, 1f);
+            blocker.transform.position = new Vector3(p.rect.xMax - 0.5f, p.rect.center.y, 0f);
+            blocker.AddComponent<BoxCollider2D>().size = new Vector2(1f, p.rect.height);
+
+            var bar = new GameObject("Bar");
+            bar.transform.SetParent(blocker.transform, false);
+            var sr = bar.AddComponent<SpriteRenderer>();
+            sr.sprite = whiteRect;
+            sr.drawMode = SpriteDrawMode.Tiled;
+            sr.size = new Vector2(0.18f, p.rect.height);
+            sr.color = WoodBrown;
+            sr.sortingOrder = 20;
+            if (spriteMaterial != null) sr.sharedMaterial = spriteMaterial;
 
             p.blocker = blocker;
-        }
-
-        /// <summary>
-        /// Ground sprite + perimeter fence + containment walls on the parcel's
-        /// three OUTER edges (north/east/west; the south edge opens onto the
-        /// farm). Mirrors the bootstrapper's fence style: posts every 1.6
-        /// units at sorting order 20, thin tiled rail strips at 19.
-        /// </summary>
-        private void BuildParcelField(int index, Parcel p)
-        {
-            var root = new GameObject("Parcel_" + index);
-            root.transform.SetParent(transform, false);
-
-            // -- ground (tiled, tinted per parcel; above the farm tilemap at -1000)
-            var ground = new GameObject("Ground");
-            ground.transform.SetParent(root.transform, false);
-            ground.transform.position = new Vector3(p.rect.center.x, p.rect.center.y, 0f);
-            var gsr = ground.AddComponent<SpriteRenderer>();
-            gsr.sprite = groundSprite;
-            gsr.drawMode = SpriteDrawMode.Tiled;
-            gsr.size = new Vector2(p.rect.width, p.rect.height);
-            gsr.color = p.groundTint;
-            gsr.sortingOrder = -950;
-            if (spriteMaterial != null) gsr.sharedMaterial = spriteMaterial;
-
-            // -- fence posts
-            void PlacePost(float x, float y)
-            {
-                var post = new GameObject("Post");
-                post.transform.SetParent(root.transform);
-                post.transform.position = new Vector3(x, y, 0f);
-                var psr = post.AddComponent<SpriteRenderer>();
-                psr.sprite = fencePostSprite;
-                psr.sortingOrder = 20;
-                if (spriteMaterial != null) psr.sharedMaterial = spriteMaterial;
-            }
-            // North edge (corner to corner).
-            for (float x = p.rect.xMin; x <= p.rect.xMax + 0.01f; x += FencePostSpacing)
-                PlacePost(x, p.rect.yMax);
-            // East + west edges. Start one spacing up: the farm's own north
-            // fence already has posts on the y = rect.yMin line.
-            for (float y = p.rect.yMin + FencePostSpacing; y < p.rect.yMax; y += FencePostSpacing)
-            {
-                PlacePost(p.rect.xMin, y);
-                PlacePost(p.rect.xMax, y);
-            }
-
-            // -- rail strips (thin tiled white_rect, wood tinted)
-            void PlaceRail(Vector2 pos, Vector2 size)
-            {
-                var rail = new GameObject("Rail");
-                rail.transform.SetParent(root.transform);
-                rail.transform.position = pos;
-                var rsr = rail.AddComponent<SpriteRenderer>();
-                rsr.sprite = whiteRect;
-                rsr.drawMode = SpriteDrawMode.Tiled;
-                rsr.size = size;
-                rsr.color = WoodBrown;
-                rsr.sortingOrder = 19;
-                if (spriteMaterial != null) rsr.sharedMaterial = spriteMaterial;
-            }
-            PlaceRail(new Vector2(p.rect.center.x, p.rect.yMax + 0.1f),
-                new Vector2(p.rect.width, RailThickness));
-            PlaceRail(new Vector2(p.rect.xMin, p.rect.center.y + 0.1f),
-                new Vector2(RailThickness, p.rect.height));
-            PlaceRail(new Vector2(p.rect.xMax, p.rect.center.y + 0.1f),
-                new Vector2(RailThickness, p.rect.height));
-
-            // -- containment walls (player must stay inside the opened land)
-            void PlaceWall(Vector2 pos, Vector2 size)
-            {
-                var wall = new GameObject("Wall");
-                wall.transform.SetParent(root.transform);
-                wall.transform.position = pos;
-                wall.AddComponent<BoxCollider2D>().size = size;
-            }
-            PlaceWall(new Vector2(p.rect.center.x, p.rect.yMax + 0.5f), new Vector2(p.rect.width, 1f));
-            PlaceWall(new Vector2(p.rect.xMin - 0.5f, p.rect.center.y), new Vector2(1f, p.rect.height));
-            PlaceWall(new Vector2(p.rect.xMax + 0.5f, p.rect.center.y), new Vector2(1f, p.rect.height));
         }
 
         // ---- ISaveable --------------------------------------------------------
@@ -339,8 +451,9 @@ namespace AnimalFarm.World
     }
 
     /// <summary>
-    /// The interactable/selectable gate sign for one locked parcel. Spawned by
-    /// ParcelManager at runtime; dies when the parcel opens.
+    /// INFO-ONLY gate sign for one locked parcel. Spawned by ParcelManager at
+    /// runtime; dies when the parcel opens. Purchasing moved to the Ferryman's
+    /// Land Office -- the gate just points the player there.
     /// </summary>
     public class ParcelGate : MonoBehaviour, IInteractable, ISelectable
     {
@@ -348,7 +461,7 @@ namespace AnimalFarm.World
         private int _index;
         private Transform _sign;
         private Vector3 _signBaseScale = Vector3.one;
-        private string _prompt = "Open parcel";
+        private string _prompt = "About this land";
         private string _title = "Parcel";
 
         public void Init(ParcelManager manager, int index, Transform sign)
@@ -359,7 +472,7 @@ namespace AnimalFarm.World
             if (sign != null) _signBaseScale = sign.localScale;
         }
 
-        /// <summary>Prompt/title strings, e.g. "Open North Meadow (6x wheat)".</summary>
+        /// <summary>Title/prompt strings, e.g. "North Field" / "About this land".</summary>
         public void SetTexts(string title, string prompt)
         {
             if (!string.IsNullOrEmpty(title)) _title = title;
@@ -375,7 +488,7 @@ namespace AnimalFarm.World
 
         public void Interact(GameObject actor)
         {
-            if (_manager != null) _manager.TryPurchase(_index);
+            LandOfficeUI.Instance?.Open();
         }
 
         public void SetFocused(bool focused)
@@ -391,9 +504,9 @@ namespace AnimalFarm.World
         public void GetSelectActions(List<SelectAction> into)
         {
             if (into == null) return;
-            into.Add(new SelectAction("Purchase", () =>
+            into.Add(new SelectAction("About this land", () =>
             {
-                if (_manager != null) _manager.TryPurchase(_index);
+                LandOfficeUI.Instance?.Open();
             }));
         }
     }

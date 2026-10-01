@@ -83,6 +83,31 @@ namespace AnimalFarm.Spirits
             if (into == null) return;
             // Keeps the menu open so repeated clicks cycle the epitaph lines.
             into.Add(new SelectAction("Read", ShowNextEpitaph, false));
+            // Muscle 04: the garden is the player's to arrange — any stone can
+            // be carried to a new resting place, free, any time.
+            into.Add(new SelectAction("Move stone", BeginMove));
+        }
+
+        /// <summary>
+        /// Free ghost placement for this stone (crossing handoff + later
+        /// rearranging). Right-click cancels and the stone stays put, so a
+        /// stone is never in limbo — it always exists somewhere saved.
+        /// </summary>
+        public void BeginMove()
+        {
+            var controller = AnimalFarm.Player.SelectionController.Instance;
+            var sr = GetComponent<SpriteRenderer>();
+            if (controller == null || sr == null || sr.sprite == null) return;
+
+            var stone = this;
+            controller.BeginPlaceBuilding(sr.sprite, transform.localScale.x,
+                AnimalFarm.Player.SelectionController.IsPlaceableCell,
+                (cell, world) =>
+                {
+                    if (stone == null) return;
+                    stone.transform.position = world;
+                    AnimalFarm.Core.Bleeps.Play(AnimalFarm.Core.BleepKind.Build, 0.6f);
+                });
         }
 
         public void SetFocused(bool focused)

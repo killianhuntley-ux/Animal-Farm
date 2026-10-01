@@ -19,6 +19,11 @@ namespace AnimalFarm.UI
         private Coroutine _savedFade;
         private bool _subscribed;
 
+        // Gentle Passage settings row (hidden when GameSettings is missing).
+        private Button _gentleButton;
+        private Text _gentleLabel;
+        private GameObject _gentleCaption;
+
         private void Start()
         {
             BuildUI();
@@ -40,6 +45,10 @@ namespace AnimalFarm.UI
         private void OnPauseChanged(bool paused)
         {
             if (_overlay != null) _overlay.SetActive(paused);
+
+            // Re-sync the toggle each time the menu opens (the value may have
+            // been changed elsewhere, e.g. restored from a save).
+            if (paused) RefreshGentleRow();
         }
 
         // ------------------------------------------------------------------ UI
@@ -63,7 +72,7 @@ namespace AnimalFarm.UI
             panel.SetParent(overlayRt, false);
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(360f, 400f);
+            panel.sizeDelta = new Vector2(360f, 580f);
 
             var panelImg = panel.gameObject.AddComponent<Image>();
             UIStyle.ApplyPanel(panelImg, UIStyle.PanelBg);
@@ -87,8 +96,23 @@ namespace AnimalFarm.UI
 
             // Buttons.
             MakeButton(panel, "Resume", OnResume);
+            MakeButton(panel, "Options", OnOptions);
             MakeButton(panel, "Save", OnSave);
             MakeButton(panel, "Save & Quit", OnSaveAndQuit);
+
+            // Settings row: Gentle Passage toggle + caption (GDD 4.4 easy mode).
+            UIStyle.MakeDivider(panel);
+
+            _gentleButton = MakeButton(panel, "Gentle Passage: OFF", OnToggleGentlePassage);
+            _gentleLabel = _gentleButton.GetComponentInChildren<Text>();
+
+            var caption = UIRoot.MakeText(panel, "GentleCaption", 16,
+                TextAnchor.MiddleCenter, UIStyle.Grey);
+            caption.text = "No repossessions. The Repo-man respects your boundaries.";
+            caption.rectTransform.sizeDelta = new Vector2(0f, 24f);
+            _gentleCaption = caption.gameObject;
+
+            RefreshGentleRow();
 
             // Transient "Saved ✓" feedback.
             _savedLabel = UIRoot.MakeText(panel, "SavedLabel", 24, TextAnchor.MiddleCenter,
@@ -100,7 +124,7 @@ namespace AnimalFarm.UI
             _overlay.SetActive(false);
         }
 
-        private static void MakeButton(Transform parent, string label, UnityEngine.Events.UnityAction onClick)
+        private static Button MakeButton(Transform parent, string label, UnityEngine.Events.UnityAction onClick)
         {
             var go = new GameObject("Button_" + label);
             var rt = go.AddComponent<RectTransform>();
@@ -119,6 +143,7 @@ namespace AnimalFarm.UI
             var text = UIRoot.MakeText(rt, "Label", 26, TextAnchor.MiddleCenter, UIStyle.Cream);
             text.text = label;
             Stretch(text.rectTransform);
+            return button;
         }
 
         private static void Stretch(RectTransform rt)
@@ -136,6 +161,11 @@ namespace AnimalFarm.UI
             if (GameManager.Instance != null) GameManager.Instance.SetPaused(false);
         }
 
+        private void OnOptions()
+        {
+            OptionsMenuUI.Open(); // modal on top of the pause overlay
+        }
+
         private void OnSave()
         {
             if (SaveSystem.Instance == null) return;
@@ -148,6 +178,40 @@ namespace AnimalFarm.UI
         private void OnSaveAndQuit()
         {
             if (GameManager.Instance != null) GameManager.Instance.SaveAndQuit();
+        }
+
+        private void OnToggleGentlePassage()
+        {
+            var settings = GameSettings.Instance;
+            if (settings == null) return;
+
+            settings.GentlePassage = !settings.GentlePassage;
+            RefreshGentleRow();
+        }
+
+        /// <summary>
+        /// Shows/hides the Gentle Passage row (hidden when GameSettings is
+        /// missing) and syncs the toggle's label and colors: gold background
+        /// with dark text when ON, standard button look when OFF.
+        /// </summary>
+        private void RefreshGentleRow()
+        {
+            if (_gentleButton == null) return;
+
+            bool available = GameSettings.Instance != null;
+            _gentleButton.gameObject.SetActive(available);
+            if (_gentleCaption != null) _gentleCaption.SetActive(available);
+            if (!available) return;
+
+            bool on = GameSettings.Instance.GentlePassage;
+            if (_gentleLabel != null)
+            {
+                _gentleLabel.text = on ? "Gentle Passage: ON" : "Gentle Passage: OFF";
+                _gentleLabel.color = on
+                    ? new Color(0.18f, 0.15f, 0.06f, 1f) // dark text on gold
+                    : UIStyle.Cream;
+            }
+            UIStyle.StyleButton(_gentleButton, on ? UIStyle.Gold : (Color?)null);
         }
 
         /// <summary>Shows "Saved ✓", holds ~1.5s, then fades — all on unscaled time.</summary>

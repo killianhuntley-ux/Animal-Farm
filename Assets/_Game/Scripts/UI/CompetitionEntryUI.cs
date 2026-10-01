@@ -7,10 +7,11 @@ using UnityEngine.UI;
 namespace AnimalFarm.UI
 {
     /// <summary>
-    /// The Boulder Trial entry modal (slice 05). Opened by the CompetitionBoard:
-    /// pick a difficulty, pick a resident, and the competition manager takes it
-    /// from there. Gameplay input is blocked while open (DebugConsole pattern).
-    /// The panel shell is built once; the rows are rebuilt on every Open.
+    /// The competition entry modal (slice 05). Opened by the CompetitionBoard:
+    /// pick an event (Boulder Trial or The Crossing), pick a difficulty, pick a
+    /// resident, and the competition manager takes it from there. Gameplay
+    /// input is blocked while open (DebugConsole pattern). The panel shell is
+    /// built once; the rows are rebuilt on every Open.
     /// </summary>
     public class CompetitionEntryUI : MonoBehaviour
     {
@@ -19,11 +20,17 @@ namespace AnimalFarm.UI
         /// <summary>Difficulty picked on the most recent entry (0..2). The board reads this for prizes.</summary>
         public static int LastDifficulty;
 
+        private static readonly string[] EventNames = { "Boulder Trial", "The Crossing" };
         private static readonly string[] DifficultyNames = { "Gentle Slope", "Proper Hill", "The Mountain" };
+
+        /// <summary>Entry fee in obols per difficulty (slice 09 economy). Same for both events.</summary>
+        private static readonly int[] EntryFees = { 5, 10, 20 };
 
         private GameObject _panel;
         private RectTransform _content; // rows rebuilt each Open
+        private Text _status;           // transient feedback line ("needs N obols")
         private bool _open;
+        private int _selectedEvent;     // 0 = Boulder Trial, 1 = The Crossing
         private int _selectedDifficulty;
 
         private void Awake()
@@ -44,6 +51,7 @@ namespace AnimalFarm.UI
             if (CompetitionManager.Instance == null || CompetitionManager.Instance.EventRunning) return;
             if (_panel == null) BuildPanel();
 
+            _selectedEvent = 0; // default: Boulder Trial
             _selectedDifficulty = 0;
             RebuildContent();
 
@@ -73,13 +81,30 @@ namespace AnimalFarm.UI
         private void PickSpirit(SpiritAgent spirit)
         {
             int difficulty = _selectedDifficulty;
+            int chosenEvent = _selectedEvent;
+
+            // Entry fee first (slice 09 economy): no obols, no entry.
+            int fee = EntryFees[Mathf.Clamp(difficulty, 0, EntryFees.Length - 1)];
+            if (Inventory.Instance == null || !Inventory.Instance.Consume("coin", fee))
+            {
+                if (_status != null)
+                {
+                    _status.text = "(needs " + fee + " obols)";
+                    _status.color = UIStyle.Danger;
+                }
+                return; // stay open so the player can pick a cheaper tier
+            }
+
             LastDifficulty = difficulty;
 
             // Close (and restore input) FIRST - the manager re-blocks it itself.
             Close();
 
             if (spirit == null || CompetitionManager.Instance == null) return;
-            CompetitionManager.Instance.StartBoulderTrial(spirit, difficulty);
+            if (chosenEvent == 1)
+                CompetitionManager.Instance.StartCrossing(spirit, difficulty);
+            else
+                CompetitionManager.Instance.StartBoulderTrial(spirit, difficulty);
         }
 
         // ------------------------------------------------------------------ UI
@@ -112,7 +137,7 @@ namespace AnimalFarm.UI
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             var title = UIRoot.MakeText(panelRt, "Title", 34, TextAnchor.MiddleCenter, UIStyle.Cream);
-            title.text = "Boulder Trial";
+            title.text = "Competitions";
             title.rectTransform.sizeDelta = new Vector2(0f, 48f);
 
             // Rows live in a nested column so the shell survives rebuilds.
@@ -138,17 +163,75 @@ namespace AnimalFarm.UI
             for (int i = _content.childCount - 1; i >= 0; i--)
                 Destroy(_content.GetChild(i).gameObject);
 
+            BuildCoinsLine();
+            BuildEventRow();
             BuildDifficultyRow();
+            BuildFeeLine();
             BuildSpiritRows();
+            BuildStatusLine();
             MakeButton(_content, "Never mind", 56f, false, Close);
+        }
+
+        /// <summary>Small grey obol balance under the title, refreshed on open.</summary>
+        private void BuildCoinsLine()
+        {
+            int obols = Inventory.Instance != null ? Inventory.Instance.Count("coin") : 0;
+            var text = UIRoot.MakeText(_content, "Obols", 19, TextAnchor.MiddleCenter, UIStyle.Grey);
+            text.text = "Obols: " + obols;
+            text.rectTransform.sizeDelta = new Vector2(0f, 26f);
+        }
+
+        /// <summary>Grey entry-fee line under the difficulty row; tracks the selection.</summary>
+        private void BuildFeeLine()
+        {
+            int fee = EntryFees[Mathf.Clamp(_selectedDifficulty, 0, EntryFees.Length - 1)];
+            var text = UIRoot.MakeText(_content, "Fee", 19, TextAnchor.MiddleCenter, UIStyle.Grey);
+            text.text = "Entry: " + fee + " obols";
+            text.rectTransform.sizeDelta = new Vector2(0f, 26f);
+        }
+
+        /// <summary>Empty until a pick fails (e.g. "(needs 10 obols)").</summary>
+        private void BuildStatusLine()
+        {
+            _status = UIRoot.MakeText(_content, "Status", 20, TextAnchor.MiddleCenter, UIStyle.Danger);
+            _status.text = "";
+            _status.rectTransform.sizeDelta = new Vector2(0f, 26f);
+        }
+
+        private void BuildEventRow()
+        {
+            // Which sport: Boulder Trial (Vigor's game) or The Crossing
+            // (Grace's race). Same toggle styling as the difficulty row.
+            var row = MakeToggleRow("EventRow");
+
+            for (int i = 0; i < EventNames.Length; i++)
+            {
+                int ev = i; // capture for the click closure
+                MakeButton(row, EventNames[i], 46f, ev == _selectedEvent,
+                    () => { _selectedEvent = ev; RebuildContent(); }, 19);
+            }
         }
 
         private void BuildDifficultyRow()
         {
-            // Fixed-height row; the layout group splits the width across the
-            // three buttons and the smaller font keeps the labels inside them
-            // (they were overlapping at 1080p).
-            var row = new GameObject("DifficultyRow").AddComponent<RectTransform>();
+            var row = MakeToggleRow("DifficultyRow");
+
+            for (int i = 0; i < DifficultyNames.Length; i++)
+            {
+                int diff = i; // capture for the click closure
+                MakeButton(row, DifficultyNames[i], 46f, diff == _selectedDifficulty,
+                    () => { _selectedDifficulty = diff; RebuildContent(); }, 19);
+            }
+        }
+
+        /// <summary>
+        /// Fixed-height row of equal-width toggle buttons; the layout group
+        /// splits the width and the smaller font keeps the labels inside them
+        /// (they were overlapping at 1080p).
+        /// </summary>
+        private RectTransform MakeToggleRow(string name)
+        {
+            var row = new GameObject(name).AddComponent<RectTransform>();
             row.SetParent(_content, false);
             row.sizeDelta = new Vector2(0f, 46f);
 
@@ -160,12 +243,7 @@ namespace AnimalFarm.UI
             rowLayout.childForceExpandWidth = true;
             rowLayout.childForceExpandHeight = true;
 
-            for (int i = 0; i < DifficultyNames.Length; i++)
-            {
-                int diff = i; // capture for the click closure
-                MakeButton(row, DifficultyNames[i], 46f, diff == _selectedDifficulty,
-                    () => { _selectedDifficulty = diff; RebuildContent(); }, 19);
-            }
+            return row;
         }
 
         private void BuildSpiritRows()

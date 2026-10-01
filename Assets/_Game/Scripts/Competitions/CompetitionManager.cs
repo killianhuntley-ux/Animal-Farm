@@ -61,7 +61,31 @@ namespace AnimalFarm.Competitions
         /// <summary>Starts the Boulder Trial with the given spirit. difficulty 0..2.</summary>
         public void StartBoulderTrial(SpiritAgent spirit, int difficulty)
         {
-            if (EventRunning || spirit == null) return;
+            if (!BeginEvent(spirit)) return;
+
+            var eventGo = new GameObject("BoulderTrial");
+            var trial = eventGo.AddComponent<BoulderTrialEvent>();
+            trial.Run(this, spirit, Mathf.Clamp(difficulty, 0, 2));
+        }
+
+        /// <summary>Starts The Crossing (ferry-dash race) with the given spirit. difficulty 0..2.</summary>
+        public void StartCrossing(SpiritAgent spirit, int difficulty)
+        {
+            if (!BeginEvent(spirit)) return;
+
+            var eventGo = new GameObject("CrossingRace");
+            var race = eventGo.AddComponent<CrossingRaceEvent>();
+            race.Run(this, spirit, Mathf.Clamp(difficulty, 0, 2));
+        }
+
+        /// <summary>
+        /// Shared pre-event setup: one event at a time, gameplay input blocked,
+        /// camera on the arena, lighting pinned to daytime. Returns false if an
+        /// event is already running or there is no spirit to enter.
+        /// </summary>
+        private bool BeginEvent(SpiritAgent spirit)
+        {
+            if (EventRunning || spirit == null) return false;
             EventRunning = true;
 
             if (GameInput.Instance != null) GameInput.Instance.SetGameplayBlocked(true);
@@ -83,9 +107,7 @@ namespace AnimalFarm.Competitions
                 }
             }
 
-            var eventGo = new GameObject("BoulderTrial");
-            var trial = eventGo.AddComponent<BoulderTrialEvent>();
-            trial.Run(this, spirit, Mathf.Clamp(difficulty, 0, 2));
+            return true;
         }
 
         /// <summary>Called by the running event when it is fully torn down.</summary>

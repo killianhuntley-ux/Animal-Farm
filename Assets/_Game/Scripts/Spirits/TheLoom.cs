@@ -39,6 +39,33 @@ namespace AnimalFarm.Spirits
         private bool _weaving;
         private bool _focused;
 
+        /// <summary>
+        /// Runtime factory for the buildable Loom. AddComponent runs Awake
+        /// immediately but Start only on the next update, so InitVisuals gets
+        /// the serialized fields in place before Start builds the body sprite.
+        /// </summary>
+        public static TheLoom Create(Vector3 pos, Sprite sprite, Material mat)
+        {
+            var go = new GameObject("TheLoom");
+            go.transform.position = pos;
+            var loom = go.AddComponent<TheLoom>();
+            loom.InitVisuals(sprite, mat);
+            return loom;
+        }
+
+        /// <summary>Code-path stand-in for the bootstrapper's private-field
+        /// assignment; also refreshes the renderer if Start already ran.</summary>
+        public void InitVisuals(Sprite sprite, Material mat)
+        {
+            loomSprite = sprite;
+            spriteMaterial = mat;
+            if (_renderer != null)
+            {
+                _renderer.sprite = sprite;
+                if (mat != null) _renderer.sharedMaterial = mat;
+            }
+        }
+
         private void Start()
         {
             var body = new GameObject("Body");

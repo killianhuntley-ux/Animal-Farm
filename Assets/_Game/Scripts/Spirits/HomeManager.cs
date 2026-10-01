@@ -32,9 +32,11 @@ namespace AnimalFarm.Spirits
         {
             var grid = TerrainGrid.Instance;
             if (species == null || grid == null || !grid.InBounds(cell)) return null;
+            if (!grid.IsUsable(cell)) return null; // locked parcel (slice 08b)
             if (grid.GetSurface(cell) == Surface.Water) return null;
             if (Home.AnyAtCell(cell)) return null;
             if (PlantManager.Instance != null && PlantManager.Instance.HasPlantAt(cell)) return null;
+            if (VillainHoles.BlocksCell(cell)) return null;
 
             return Spawn(species, cell);
         }

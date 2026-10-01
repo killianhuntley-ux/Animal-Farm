@@ -1,5 +1,7 @@
 # 00 — Slice Roadmap
 
+> **SKELETON COMPLETE (2026-10-01).** Every core system exists and compiles: lure→tend→compete(x2)→weave→defend→expand→ascend, economy, onboarding, friction, placeholder audio. Owner's phase plan: skeleton → **muscle** (evaluate each aspect, flesh out depth/feel — STARTS NOW) → skin (art for locked-in systems). Herding chase shipped; The Crossing shipped; weeds/watchlight shipped. Remaining content-shaped work (region chunks, species roster growth) belongs to the muscle/chunk cadence, not the skeleton.
+
 **Source of truth:** [Game Master File.md](../Game%20Master%20File.md) (GDD) · [Initial_Research.md](../Initial_Research.md)
 **Model:** GDD §5.4 — core loop first, then coherent chunks. Nothing beyond the current slice is promised, including to yourself.
 
@@ -16,13 +18,29 @@
 | 05 | [The Boulder Trial](05_Boulder_Trial.md) | Competitions (the hook) are actually fun | ✅ built (fun verdict pending) — venue moved to TOWN |
 | 05b | [Spirit Identity](05b_Spirit_Identity.md) | Per-individual stats + inspection make duplicates desirable | ✅ built |
 | 06 | [Weaving](06_Weaving.md) | The second door; cryptid creation lands | ✅ built (Wailpertinger, Mothmaus; the Loom, west field) |
-| 07 | [The Repo-man](07_Repo_Man.md) | Friction with a face; easy mode | 🔨 built this session — **M2** pending playtest. Design shift: repo targets runaways left unrecovered >2 game-hours (runaway = warning, repossession = escalation, first visit = lecture only). Fee: 2x favored food at the town Holding Office. `gentle on` = easy mode. |
-| 08 | [The Frontier](08_Frontier.md) | Expansion, second region, absence management | 🔨 parcel machinery built (2 north parcels, produce-priced gates). **Tech debt:** parcels are traversal-only — TerrainGrid extension to parcels = slice 08b before biome regions. Absence/events model still pending. |
-| 09 | [Economy & Vendors](09_Economy_Vendors.md) | Money in/out balances; NPC services | — |
-| 10 | [Presentation & Onboarding](10_Presentation_Onboarding.md) | Real art/audio on the rigs; a stranger can learn it | **M3: Demo** ✂ |
+| 07 | [The Repo-man](07_Repo_Man.md) | Friction with a face; easy mode | ✅ built — **M2**. Runaway = warning, repossession = escalation, first visit = lecture. Holding Office fees. Gentle Passage now in the pause menu. |
+| 08 | [The Frontier](08_Frontier.md) | Expansion, second region, absence management | ✅ built incl. **08b**: parcels are REAL tillable terrain (usable-cell mask; spirit borders grow with the land). Absence pressure = weeds (mood-souring, telegraphed, never erase work) + purchasable Watchlight wards. |
+| 09 | [Economy, Vendors & The Town](09_Economy_Vendors.md) | Money flows; walking to town is a pleasure | ✅ core built: **obols** (coin, themed), essence (sell 8 obols OR weave-toll 6), Vendor (sell produce/essence, buy treats + watchlights), **Ferryman land office** (parcel overview, distance-priced deeds), competition fees/prizes, follow treats. Balance = muscle phase. |
+| 10 | [Presentation & Onboarding](10_Presentation_Onboarding.md) | Real art/audio on the rigs; a stranger can learn it | 🟡 skeleton: Guide light (7 pointed steps, skippable, old-save-aware) + procedural placeholder audio (synth blips, no assets). Real art/audio + stranger test = skin phase. |
 | 11 | [Region Chunk Template](11_Region_Chunk_Template.md) | The repeatable EA content pattern (regions 3–7, villains 2–3) | **M4: EA launch** when 3–4 regions feel complete |
 
 ✂ = a build you could hand to another human.
+
+## MUSCLE PHASE (2026-09-30 — verdicts locked via owner question rounds)
+
+All muscle design lives in [../Muscle/](../Muscle/) — one doc per area, every verdict owner-decided. Cadence: **ask/answer (done) → build all → playtest via the in-game feedback tool → re-examine → repeat.**
+
+| Doc | Covers | Headlines |
+|---|---|---|
+| [01 Foundations](../Muscle/01_Foundations_Muscle.md) | Shepherd body | Weighty tool actions + Blacksmith tier upgrades, shepherd XP ("doing the work"), staggered vendor move-ins, 4-dir facing, sit & rest, camera clamp, walk juice |
+| [02 Living Land](../Muscle/02_Living_Land_Muscle.md) | Land + biomes | **Player-sculpted biomes** (swamp/desert/grass, 5-step spirit affinity), **satellite-base world** (3x3→4x4 + road rights), rain, water life, crop quality/regrow/wilt, compost |
+| [03 First Spirits](../Muscle/03_First_Spirits_Muscle.md) | Spirit charm | Want bubbles, presence reactions, idle quirk library, pair interactions, night shift, synth voices, light-descends naming, shy silhouettes, per-species mood animations |
+| [04 Full Lifecycle](../Muscle/04_Full_Lifecycle_Muscle.md) | The goodbye | **The Styx crossing replaces ascension** (Charon, spirit-orb payment, headstone keepsake), buildable ascension pad, memorial garden (no buffs), no anti-hoarding pressure |
+| [05+05b Competitions/Identity](../Muscle/05_Competitions_Identity_Muscle.md) | Stats + calendar | **Competitions HELD**, species stat bands, passive training buildings, individual traits, **15-day underworld seasons + calendar** |
+| [06 Weaving](../Muscle/06_Weaving_Muscle.md) | The second door | Night loom rite, experiment+rumor recipes, full inheritance (stats/traits/name echo), tapestry banner keepsakes |
+| [07 Friction](../Muscle/07_Friction_Muscle.md) | Adversity | Repo-man walks in + bribeable, useful weeds, **untamable villain spirits** (Digger/Devourer/Scarer — small recoverable losses) |
+| [08+09 Frontier/Economy](../Muscle/08_Frontier_Economy_Muscle.md) | World + money | Walk the roads (all 4 dangers + defense items), **swamp satellite first**, vendors-only selling, traveling merchants, biome-exclusive vendors, the **Pouty Mount** |
+| [10 Presentation](../Muscle/10_Presentation_Muscle.md) | Polish + loop | Guide-light personality (tutorial-scoped, "Navi but less intrusive"), procedural ambient music, options+rebinding, **in-game playtest feedback tool** |
 
 ## Playtest log (owner sessions)
 

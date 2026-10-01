@@ -29,9 +29,26 @@ namespace AnimalFarm.EditorTools
     {
         private const string ScenePath = "Assets/_Game/Scenes/Prairie.unity";
         private const string ArtDir = "Assets/_Game/Art/Placeholder/";
-        // UX pass: 80x50 was a camera-test size; the farm is a fenced 40x26 plot
-        // so border silhouettes are always discoverable from the middle.
-        private const float FieldW = 40f, FieldH = 26f;
+        // Muscle 02/08 world restructure (owner): the HOME base is a 3x3
+        // cluster of 10x8 parcels (centre owned at start) inside one perimeter
+        // fence; unbuyable scrub buffer all around; a gated ROAD corridor runs
+        // west to the 2x2 SWAMP satellite cluster; the town stays east through
+        // a gate. Parcel deeds live in ParcelManager -- keep geometry in step.
+        private const float ParcelW = 10f, ParcelH = 8f;
+        // home cluster x[-15,15] y[-12,12]; swamp x[-47,-27] y[-8,8]
+        private const float HomeMinX = -15f, HomeMinY = -12f;
+        private const float HomeMaxX = 15f, HomeMaxY = 12f;
+        private const float SwampMinX = -47f, SwampMinY = -8f;
+        private const float SwampMaxX = -27f, SwampMaxY = 8f;
+        // road corridor x[-27,-15] y[-2,2] (walkable, never purchasable land)
+        private const float RoadMinX = -27f, RoadMaxX = -15f;
+        private const float RoadMinY = -2f, RoadMaxY = 2f;
+        // terrain grid: swamp + road + home cluster + scrub buffer ring
+        private const int GridW = 78, GridH = 40;
+        private const float GridOriginX = -56f, GridOriginY = -20f;
+        // town plaza east of the home cluster's gate: x[15,37.5] y[-7.5,7.5]
+        private const float TownGateHalf = 1.5f;  // east gate half-height
+        private const float RoadGateHalf = 2f;    // west (road) gate half-height
 
         [MenuItem("AnimalFarm/Build Prairie Scene")]
         public static void Generate()
@@ -76,13 +93,36 @@ namespace AnimalFarm.EditorTools
             var tilemapCollider = tilemapGo.AddComponent<TilemapCollider2D>(); // water blocks walking
 
             var terrainGrid = terrainRoot.AddComponent<TerrainGrid>();
-            AssignPrivateField(terrainGrid, "width", (int)FieldW);
-            AssignPrivateField(terrainGrid, "height", (int)FieldH);
+            // Grid covers swamp + road + home cluster + buffer; the home
+            // cluster's CENTRE parcel starts usable. Cell = world - origin.
+            AssignPrivateField(terrainGrid, "width", GridW);
+            AssignPrivateField(terrainGrid, "height", GridH);
+            AssignPrivateField(terrainGrid, "worldOriginX", GridOriginX);
+            AssignPrivateField(terrainGrid, "worldOriginY", GridOriginY);
+            AssignPrivateField(terrainGrid, "initialUsableX", (int)(-5f - GridOriginX)); // 51
+            AssignPrivateField(terrainGrid, "initialUsableY", (int)(-4f - GridOriginY)); // 16
+            AssignPrivateField(terrainGrid, "initialUsableW", (int)ParcelW);
+            AssignPrivateField(terrainGrid, "initialUsableH", (int)ParcelH);
+            // zoning (cell space): clusters draw dimmed-until-bought; the road
+            // draws packed earth; the swamp rect carries the murky ground cast
+            // and two starter pools (stamped only into fresh worlds).
+            var homeCells = new RectInt((int)(HomeMinX - GridOriginX), (int)(HomeMinY - GridOriginY), 30, 24);
+            var swampCells = new RectInt((int)(SwampMinX - GridOriginX), (int)(SwampMinY - GridOriginY), 20, 16);
+            var roadCells = new RectInt((int)(RoadMinX - GridOriginX), (int)(RoadMinY - GridOriginY), 12, 4);
+            AssignPrivateField(terrainGrid, "clusterRects", new[] { homeCells, swampCells });
+            AssignPrivateField(terrainGrid, "roadRects", new[] { roadCells });
+            AssignPrivateField(terrainGrid, "swampRect", swampCells);
+            AssignPrivateField(terrainGrid, "seedWaterRects", new[]
+            {
+                new RectInt((int)(-44f - GridOriginX), (int)(3f - GridOriginY), 3, 2),  // Reedmire Hollow pool
+                new RectInt((int)(-33f - GridOriginX), (int)(-5f - GridOriginY), 3, 2)  // Reedmire Deep pool
+            });
             AssignPrivateField(terrainGrid, "tilemap", tilemap);
             AssignPrivateField(terrainGrid, "scrubTile", ContentBootstrapper.LoadTile("Tile_Scrub"));
             AssignPrivateField(terrainGrid, "dirtTile", ContentBootstrapper.LoadTile("Tile_Dirt"));
             AssignPrivateField(terrainGrid, "grassTile", ContentBootstrapper.LoadTile("Tile_Grass"));
             AssignPrivateField(terrainGrid, "waterTile", ContentBootstrapper.LoadTile("Tile_Water"));
+            // sandTile stays null: Sand renders via the grid's runtime flat tile.
 
             // --- World systems ----------------------------------------------
             var plantSpecies = ContentBootstrapper.LoadAllPlantSpecies();
@@ -102,43 +142,46 @@ namespace AnimalFarm.EditorTools
             var headstones = worldSystems.AddComponent<HeadstoneRegistry>();
             AssignPrivateField(headstones, "headstoneSprite", Sprite(ArtDir + "headstone.png"));
             AssignPrivateField(headstones, "spriteMaterial", litMat);
+            AssignPrivateField(headstones, "gravePlotOrigin", new Vector2(-4.2f, -3.2f)); // hearth parcel, SW
 
             var compManager = worldSystems.AddComponent<CompetitionManager>();
             AssignPrivateField(compManager, "spriteMaterial", litMat);
             var repoManager = worldSystems.AddComponent<RepoManManager>();
             AssignPrivateField(repoManager, "repoSprite", Sprite(ArtDir + "repoman_body.png"));
             AssignPrivateField(repoManager, "spriteMaterial", litMat);
+            worldSystems.AddComponent<AnimalFarm.Core.BleepsWireup>();
+            var essence = worldSystems.AddComponent<EssenceSpawner>();
+            AssignPrivateField(essence, "moteSprite", Sprite(ArtDir + "white_circle.png"));
+            AssignPrivateField(essence, "spriteMaterial", litMat);
+            var onboarding = worldSystems.AddComponent<AnimalFarm.Onboarding.OnboardingManager>();
+            AssignPrivateField(onboarding, "glowSprite", Sprite(ArtDir + "altar_glow.png"));
+            AssignPrivateField(onboarding, "spriteMaterial", litMat);
+            var weedManager = worldSystems.AddComponent<WeedManager>();
+            AssignPrivateField(weedManager, "weedSprite", Sprite(ArtDir + "weed_thistle.png"));
+            AssignPrivateField(weedManager, "watchlightSprite", Sprite(ArtDir + "watchlight_post.png"));
+            AssignPrivateField(weedManager, "spriteMaterial", litMat);
             var parcelManager = worldSystems.AddComponent<ParcelManager>();
             AssignPrivateField(parcelManager, "spriteMaterial", litMat);
-            AssignPrivateField(parcelManager, "groundSprite", Sprite(ArtDir + "ground_grass.png"));
-            AssignPrivateField(parcelManager, "fencePostSprite", Sprite(ArtDir + "fence_post.png"));
             AssignPrivateField(parcelManager, "whiteRect", Sprite(ArtDir + "white_rect.png"));
+            AssignPrivateField(parcelManager, "alwaysInCameraBounds",
+                Rect.MinMaxRect(HomeMaxX, -7.5f, 37.5f, 7.5f)); // the town plaza
+            worldSystems.AddComponent<BiomeScorer>(); // per-base terrain census (muscle 02)
 
             // --- Competition Board (slice 05; lives in TOWN per owner decision) --
             var boardGo = new GameObject("CompetitionBoard");
-            boardGo.transform.position = new Vector3(37f, 0f, 0f);
+            boardGo.transform.position = new Vector3(19.5f, 4.5f, 0f); // just inside the town gate
             boardGo.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
             var board = boardGo.AddComponent<CompetitionBoard>();
             AssignPrivateField(board, "boardSprite", Sprite(ArtDir + "notice_board.png"));
             AssignPrivateField(board, "spriteMaterial", litMat);
 
-            // --- The Loom (slice 06: weaving ritual site, west side) -----------
-            var loomGo = new GameObject("TheLoom");
-            loomGo.transform.position = new Vector3(-12f, 6f, 0f);
-            var loom = loomGo.AddComponent<TheLoom>();
-            AssignPrivateField(loom, "loomSprite", Sprite(ArtDir + "loom.png"));
-            AssignPrivateField(loom, "spriteMaterial", litMat);
+            // The Loom and Waystone are BUILDABLE now (hammer menu) — no longer
+            // pre-placed. HomePickerUI carries their sprites.
 
-            // --- Ascension Altar (slice 04) ----------------------------------
-            var altarGo = new GameObject("AscensionAltar");
-            altarGo.transform.position = new Vector3(0f, 8f, 0f);
-            var altar = altarGo.AddComponent<AscensionAltar>();
-            AssignPrivateField(altar, "platformSprite", Sprite(ArtDir + "altar_platform.png"));
-            AssignPrivateField(altar, "glowSprite", Sprite(ArtDir + "altar_glow.png"));
-            AssignPrivateField(altar, "columnSprite", Sprite(ArtDir + "altar_column.png"));
-            AssignPrivateField(altar, "spriteMaterial", litMat);
-
-            // --- Farm fence (visual border on the collider walls) -------------
+            // --- Perimeter fences (visuals; matching collider walls below) ----
+            // One fence around the WHOLE home cluster (locked parcels inside
+            // are walkable -- TerrainGrid draws them dim), one around the
+            // swamp cluster, and rails down both sides of the road corridor.
             var fenceParent = new GameObject("Fence");
             var postSprite = Sprite(ArtDir + "fence_post.png");
             var railTint = new Color(0.42f, 0.31f, 0.22f);
@@ -153,16 +196,6 @@ namespace AnimalFarm.EditorTools
                 psr.sortingOrder = 20;
                 if (litMat) psr.sharedMaterial = litMat;
             }
-            for (float x = -FieldW / 2; x <= FieldW / 2 + 0.01f; x += postSpacing)
-            {
-                PlacePost(x, FieldH / 2);
-                PlacePost(x, -FieldH / 2);
-            }
-            for (float y = -FieldH / 2 + postSpacing; y < FieldH / 2; y += postSpacing)
-            {
-                PlacePost(-FieldW / 2, y);
-                if (Mathf.Abs(y) > 2.4f) PlacePost(FieldW / 2, y); // leave the town gate open
-            }
             void PlaceRail(Vector2 pos, Vector2 size)
             {
                 var rail = new GameObject("Rail");
@@ -176,18 +209,43 @@ namespace AnimalFarm.EditorTools
                 rsr.sortingOrder = 19;
                 if (litMat) rsr.sharedMaterial = litMat;
             }
-            PlaceRail(new Vector2(0, FieldH / 2 + 0.1f), new Vector2(FieldW, 0.12f));
-            PlaceRail(new Vector2(0, -FieldH / 2 + 0.1f), new Vector2(FieldW, 0.12f));
-            PlaceRail(new Vector2(-FieldW / 2, 0.1f), new Vector2(0.12f, FieldH));
-            // east rail splits around the town gate
-            PlaceRail(new Vector2(FieldW / 2, (FieldH / 2 + 2.4f) / 2f), new Vector2(0.12f, FieldH / 2 - 2.4f));
-            PlaceRail(new Vector2(FieldW / 2, -(FieldH / 2 + 2.4f) / 2f), new Vector2(0.12f, FieldH / 2 - 2.4f));
+            // Posts every 1.6 along a straight run + one rail over its length.
+            void FenceRun(Vector2 a, Vector2 b)
+            {
+                bool horizontal = Mathf.Abs(b.x - a.x) > Mathf.Abs(b.y - a.y);
+                float len = horizontal ? Mathf.Abs(b.x - a.x) : Mathf.Abs(b.y - a.y);
+                int posts = Mathf.Max(2, Mathf.RoundToInt(len / postSpacing) + 1);
+                for (int i = 0; i < posts; i++)
+                {
+                    float t = i / (float)(posts - 1);
+                    PlacePost(Mathf.Lerp(a.x, b.x, t), Mathf.Lerp(a.y, b.y, t));
+                }
+                Vector2 mid = (a + b) * 0.5f + new Vector2(0f, 0.1f);
+                PlaceRail(mid, horizontal ? new Vector2(len, 0.12f) : new Vector2(0.12f, len));
+            }
+
+            // home cluster perimeter: gates east (to town) + west (the road)
+            FenceRun(new Vector2(HomeMinX, HomeMaxY), new Vector2(HomeMaxX, HomeMaxY));
+            FenceRun(new Vector2(HomeMinX, HomeMinY), new Vector2(HomeMaxX, HomeMinY));
+            FenceRun(new Vector2(HomeMinX, HomeMinY), new Vector2(HomeMinX, -RoadGateHalf));
+            FenceRun(new Vector2(HomeMinX, RoadGateHalf), new Vector2(HomeMinX, HomeMaxY));
+            FenceRun(new Vector2(HomeMaxX, HomeMinY), new Vector2(HomeMaxX, -TownGateHalf));
+            FenceRun(new Vector2(HomeMaxX, TownGateHalf), new Vector2(HomeMaxX, HomeMaxY));
+            // road corridor sides
+            FenceRun(new Vector2(RoadMinX, RoadMaxY), new Vector2(RoadMaxX, RoadMaxY));
+            FenceRun(new Vector2(RoadMinX, RoadMinY), new Vector2(RoadMaxX, RoadMinY));
+            // swamp cluster perimeter: one gate east, onto the road
+            FenceRun(new Vector2(SwampMinX, SwampMaxY), new Vector2(SwampMaxX, SwampMaxY));
+            FenceRun(new Vector2(SwampMinX, SwampMinY), new Vector2(SwampMaxX, SwampMinY));
+            FenceRun(new Vector2(SwampMinX, SwampMinY), new Vector2(SwampMinX, SwampMaxY));
+            FenceRun(new Vector2(SwampMaxX, SwampMinY), new Vector2(SwampMaxX, -RoadGateHalf));
+            FenceRun(new Vector2(SwampMaxX, RoadGateHalf), new Vector2(SwampMaxX, SwampMaxY));
 
             // --- Scatter detail (pebbles only — tufts clash with tile look) --
             var scatterParent = new GameObject("Scatter");
             var rng = new System.Random(42);
             var pebble = Sprite(ArtDir + "pebble.png");
-            for (int i = 0; i < 26; i++)
+            for (int i = 0; i < 10; i++)
             {
                 var go = new GameObject("Pebble");
                 go.transform.SetParent(scatterParent.transform);
@@ -200,39 +258,48 @@ namespace AnimalFarm.EditorTools
                 go.transform.localScale = new Vector3(s, s, 1f);
             }
 
-            // --- Bounds (east wall has a gate at y in [-2, 2] leading to town) --
+            // --- Bounds (collider walls mirroring the fence runs) --------------
+            // Straight wall along a fence line, 0.8 thick, centred on the line.
             var bounds = new GameObject("Bounds");
-            // North wall in two NAMED halves — ParcelManager destroys them by
-            // name when the matching parcel is purchased (slice 08 contract).
-            var northW = new GameObject("NorthWall_P0");
-            northW.transform.SetParent(bounds.transform);
-            northW.transform.position = new Vector2(-FieldW / 4, FieldH / 2 + 0.5f);
-            northW.AddComponent<BoxCollider2D>().size = new Vector2(FieldW / 2, 1);
-            var northE = new GameObject("NorthWall_P1");
-            northE.transform.SetParent(bounds.transform);
-            northE.transform.position = new Vector2(FieldW / 4, FieldH / 2 + 0.5f);
-            northE.AddComponent<BoxCollider2D>().size = new Vector2(FieldW / 2, 1);
-            AddWall(bounds, new Vector2(0, -FieldH / 2 - 0.5f), new Vector2(FieldW, 1));
-            AddWall(bounds, new Vector2(-FieldW / 2 - 0.5f, 0), new Vector2(1, FieldH));
-            float gateHalf = 2f;
-            float eastSegH = FieldH / 2 - gateHalf;
-            AddWall(bounds, new Vector2(FieldW / 2 + 0.5f, gateHalf + eastSegH / 2), new Vector2(1, eastSegH));
-            AddWall(bounds, new Vector2(FieldW / 2 + 0.5f, -gateHalf - eastSegH / 2), new Vector2(1, eastSegH));
+            void WallRun(Vector2 a, Vector2 b)
+            {
+                bool horizontal = Mathf.Abs(b.x - a.x) > Mathf.Abs(b.y - a.y);
+                float len = horizontal ? Mathf.Abs(b.x - a.x) : Mathf.Abs(b.y - a.y);
+                AddWall(bounds, (a + b) * 0.5f,
+                    horizontal ? new Vector2(len, 0.8f) : new Vector2(0.8f, len));
+            }
+            // home cluster (gates east + west; the west gap is sealed by
+            // ParcelManager's road blocker until road rights are bought)
+            WallRun(new Vector2(HomeMinX, HomeMaxY), new Vector2(HomeMaxX, HomeMaxY));
+            WallRun(new Vector2(HomeMinX, HomeMinY), new Vector2(HomeMaxX, HomeMinY));
+            WallRun(new Vector2(HomeMinX, HomeMinY), new Vector2(HomeMinX, -RoadGateHalf));
+            WallRun(new Vector2(HomeMinX, RoadGateHalf), new Vector2(HomeMinX, HomeMaxY));
+            WallRun(new Vector2(HomeMaxX, HomeMinY), new Vector2(HomeMaxX, -TownGateHalf));
+            WallRun(new Vector2(HomeMaxX, TownGateHalf), new Vector2(HomeMaxX, HomeMaxY));
+            // road corridor
+            WallRun(new Vector2(RoadMinX, RoadMaxY), new Vector2(RoadMaxX, RoadMaxY));
+            WallRun(new Vector2(RoadMinX, RoadMinY), new Vector2(RoadMaxX, RoadMinY));
+            // swamp cluster
+            WallRun(new Vector2(SwampMinX, SwampMaxY), new Vector2(SwampMaxX, SwampMaxY));
+            WallRun(new Vector2(SwampMinX, SwampMinY), new Vector2(SwampMaxX, SwampMinY));
+            WallRun(new Vector2(SwampMinX, SwampMinY), new Vector2(SwampMinX, SwampMaxY));
+            WallRun(new Vector2(SwampMaxX, SwampMinY), new Vector2(SwampMaxX, -RoadGateHalf));
+            WallRun(new Vector2(SwampMaxX, RoadGateHalf), new Vector2(SwampMaxX, SwampMaxY));
 
-            // --- Town (slice 09 pulled forward: competitions live in town) -----
-            // Contained plaza east of the farm gate: x in [20.5, 46], y in [-9, 9].
-            AddWall(bounds, new Vector2(33.25f, 9.5f), new Vector2(26f, 1f));
-            AddWall(bounds, new Vector2(33.25f, -9.5f), new Vector2(26f, 1f));
-            AddWall(bounds, new Vector2(46.5f, 0f), new Vector2(1f, 20f));
+            // --- Town (slice 09: competitions + vendors live in town) ----------
+            // Contained plaza east of the home gate: x in [15, 37.5], y in [-7.5, 7.5].
+            AddWall(bounds, new Vector2(26.25f, 7.5f), new Vector2(22.5f, 1f));
+            AddWall(bounds, new Vector2(26.25f, -7.5f), new Vector2(22.5f, 1f));
+            AddWall(bounds, new Vector2(37.5f, 0f), new Vector2(1f, 16f));
 
             var town = new GameObject("Town");
             var townGround = new GameObject("TownGround");
             townGround.transform.SetParent(town.transform);
-            townGround.transform.position = new Vector3(33.5f, 0f, 0f);
+            townGround.transform.position = new Vector3(26.25f, 0f, 0f);
             var tgSr = townGround.AddComponent<SpriteRenderer>();
             tgSr.sprite = Sprite(ArtDir + "ground_grass.png");
             tgSr.drawMode = SpriteDrawMode.Tiled;
-            tgSr.size = new Vector2(25f, 18f);
+            tgSr.size = new Vector2(22.5f, 15f);
             tgSr.color = new Color(0.78f, 0.70f, 0.55f); // packed-dirt plaza
             tgSr.sortingOrder = -950;
             if (litMat) tgSr.sharedMaterial = litMat;
@@ -250,13 +317,26 @@ namespace AnimalFarm.EditorTools
                 stall.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
                 AnimalFarm.UI.WorldLabel.Attach(stall, label, -0.9f);
             }
-            PlaceStall(new Vector2(30f, 4.5f), "Vendor (coming soon)", new Color(0.8f, 0.75f, 0.9f));
-            PlaceStall(new Vector2(30f, -4.5f), "Ferryman (coming soon)", new Color(0.7f, 0.85f, 0.9f));
+            // Vendor is REAL now (slice 09 economy); Ferryman still a placeholder.
+            var vendorGo = new GameObject("VendorStall");
+            vendorGo.transform.SetParent(town.transform);
+            vendorGo.transform.position = new Vector3(29f, 4.5f, 0f);
+            var vendor = vendorGo.AddComponent<VendorStall>();
+            AssignPrivateField(vendor, "stallSprite", Sprite(ArtDir + "notice_board.png"));
+            AssignPrivateField(vendor, "spriteMaterial", litMat);
+            // Ferryman is REAL now: land deeds via the parcel overview.
+            var ferryGo = new GameObject("FerrymanStall");
+            ferryGo.transform.SetParent(town.transform);
+            ferryGo.transform.position = new Vector3(29f, -4.5f, 0f);
+            var ferry = ferryGo.AddComponent<FerrymanStall>();
+            AssignPrivateField(ferry, "stallSprite", Sprite(ArtDir + "notice_board.png"));
+            AssignPrivateField(ferry, "spriteMaterial", litMat);
 
             // Holding Office (slice 07): where repossessed spirits await fees.
+            // INSIDE the town walls (owner rule) -- the old 42,5 sat outside.
             var officeGo = new GameObject("HoldingOffice");
             officeGo.transform.SetParent(town.transform);
-            officeGo.transform.position = new Vector3(42f, 5f, 0f);
+            officeGo.transform.position = new Vector3(34f, 4.5f, 0f);
             var office = officeGo.AddComponent<HoldingOffice>();
             AssignPrivateField(office, "officeSprite", Sprite(ArtDir + "holding_office.png"));
             AssignPrivateField(office, "spriteMaterial", litMat);
@@ -264,11 +344,11 @@ namespace AnimalFarm.EditorTools
             // --- Rocks (obstacles) -----------------------------------------
             var rocksParent = new GameObject("Rocks");
             var rockSprite = Sprite(ArtDir + "rock.png");
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 2; i++)
             {
                 var rock = new GameObject("Rock");
                 rock.transform.SetParent(rocksParent.transform);
-                rock.transform.position = RandomInField(rng, margin: 6f);
+                rock.transform.position = RandomInField(rng, margin: 1.5f); // 10x8 hearth parcel
                 var sr = rock.AddComponent<SpriteRenderer>();
                 sr.sprite = rockSprite;
                 if (litMat) sr.sharedMaterial = litMat;
@@ -323,22 +403,13 @@ namespace AnimalFarm.EditorTools
             AssignPrivateField(visual, "bodyRenderer", body.GetComponent<SpriteRenderer>());
             AssignPrivateField(visual, "headRenderer", head.GetComponent<SpriteRenderer>());
 
-            // --- Waystone (interaction test object) ------------------------
-            var waystone = new GameObject("Waystone");
-            waystone.transform.position = new Vector3(4f, 2f, 0);
-            var wsSr = waystone.AddComponent<SpriteRenderer>();
-            wsSr.sprite = Sprite(ArtDir + "waystone.png");
-            if (litMat) wsSr.sharedMaterial = litMat;
-            var wsCol = waystone.AddComponent<BoxCollider2D>();
-            wsCol.isTrigger = true;
-            wsCol.size = new Vector2(1.2f, 1.4f);
-            waystone.AddComponent<Waystone>();
+            // Waystone is buildable via the hammer menu now — not pre-placed.
 
             // --- Camera -----------------------------------------------------
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
-            cam.orthographicSize = 6f;
+            cam.orthographicSize = 5.5f;
             cam.backgroundColor = new Color(0.16f, 0.20f, 0.14f);
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.transparencySortMode = TransparencySortMode.CustomAxis;
@@ -368,7 +439,12 @@ namespace AnimalFarm.EditorTools
             ui.AddComponent<WeaveUI>();
             ui.AddComponent<AlarmBannerUI>();
             ui.AddComponent<HoldingOfficeUI>();
-            ui.AddComponent<HomePickerUI>();
+            var homePicker = ui.AddComponent<HomePickerUI>();
+            AssignPrivateField(homePicker, "loomSprite", Sprite(ArtDir + "loom.png"));
+            AssignPrivateField(homePicker, "waystoneSprite", Sprite(ArtDir + "waystone.png"));
+            AssignPrivateField(homePicker, "spriteMaterial", litMat);
+            ui.AddComponent<VendorUI>();
+            ui.AddComponent<LandOfficeUI>();
 
             var es = new GameObject("EventSystem");
             es.AddComponent<UnityEngine.EventSystems.EventSystem>();
@@ -390,12 +466,13 @@ namespace AnimalFarm.EditorTools
             return s;
         }
 
+        /// <summary>Random point inside the HEARTH parcel (10x8, centred on origin).</summary>
         private static Vector3 RandomInField(System.Random rng, float margin)
         {
-            float x = Mathf.Lerp(-FieldW / 2 + margin, FieldW / 2 - margin, (float)rng.NextDouble());
-            float y = Mathf.Lerp(-FieldH / 2 + margin, FieldH / 2 - margin, (float)rng.NextDouble());
+            float x = Mathf.Lerp(-ParcelW / 2 + margin, ParcelW / 2 - margin, (float)rng.NextDouble());
+            float y = Mathf.Lerp(-ParcelH / 2 + margin, ParcelH / 2 - margin, (float)rng.NextDouble());
             // keep spawn area near origin clear
-            if (Mathf.Abs(x) < 3f && Mathf.Abs(y) < 3f) x += 6f;
+            if (Mathf.Abs(x) < 1.5f && Mathf.Abs(y) < 1.5f) x += 2.5f;
             return new Vector3(x, y, 0);
         }
 

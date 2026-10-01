@@ -60,6 +60,12 @@ namespace AnimalFarm.Spirits
 
             _residentCounter = CountResidents;
             ResidentPresentCondition.ResidentCounter = _residentCounter;
+
+            // Muscle 04: the pad manager must exist before SaveSystem.Start
+            // scans for ISaveables, so its "ascension" key loads (and the
+            // first-fulfilment unlock flag survives). Runtime GetOrCreate —
+            // no bootstrapper wiring, degrades cleanly in old scenes.
+            AscensionPadManager.Ensure();
         }
 
         private void OnDestroy()
@@ -311,6 +317,15 @@ namespace AnimalFarm.Spirits
             var recipe = FindRecipe(a.Species, b.Species);
             if (recipe == null || recipe.result == null) return null;
 
+            // Owner decision: essence is the weave currency — sell it or save
+            // it for rituals; deeper weaves cost more (recipe.essenceCost).
+            if (recipe.essenceCost > 0)
+            {
+                if (Inventory.Instance == null
+                    || !Inventory.Instance.Consume("essence", recipe.essenceCost))
+                    return null; // UI validates first; this is the hard gate
+            }
+
             var result = recipe.result;
             string nameA = WeaveParentName(a);
             string nameB = WeaveParentName(b);
@@ -396,20 +411,13 @@ namespace AnimalFarm.Spirits
             _spirits.Clear();
         }
 
-        /// <summary>Random point on the border ring, 1.5 units inside the walls.</summary>
+        /// <summary>Random point on the USABLE region's edge ring (slice 08b:
+        /// grows as parcels unlock, so new land gets border silhouettes too).</summary>
         private static Vector3 RandomBorderPoint()
         {
             var grid = TerrainGrid.Instance;
-            float hw = (grid != null ? grid.Width : 80) * 0.5f - BorderInset;
-            float hh = (grid != null ? grid.Height : 50) * 0.5f - BorderInset;
-
-            switch (Random.Range(0, 4))
-            {
-                case 0: return new Vector3(Random.Range(-hw, hw), hh, 0f);  // top
-                case 1: return new Vector3(Random.Range(-hw, hw), -hh, 0f); // bottom
-                case 2: return new Vector3(-hw, Random.Range(-hh, hh), 0f); // left
-                default: return new Vector3(hw, Random.Range(-hh, hh), 0f); // right
-            }
+            if (grid != null) return grid.RandomUsableBorderPoint();
+            return new Vector3(Random.Range(-18f, 18f), 11.5f, 0f); // fallback
         }
 
         // ---- ISaveable -----------------------------------------------------------

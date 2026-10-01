@@ -23,6 +23,14 @@ MonoBehaviour:
   maxResidents: 2
   activity: 0
   wanderSpeed: 1.6
+  habitatPreference: 2
+  napWeight: 0.4
+  stretchWeight: 0.8
+  hopWeight: 1.8
+  leafChaseWeight: 1.6
+  voiceBasePitch: 560
+  voiceContour: 0.8
+  voiceChirpSeconds: 0.05
   hungerHours: 10
   spiritDecayPerHungryHour: 8
   feedSpiritBoost: 15

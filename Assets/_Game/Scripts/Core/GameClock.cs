@@ -81,6 +81,18 @@ namespace AnimalFarm.Core
             _normalizedTime = Mathf.Repeat(hours, 24f) / 24f;
         }
 
+        /// <summary>
+        /// Debug/console: jump to an absolute day (clamped to >= 1). Time of
+        /// day is kept; OnDayChanged fires so the calendar and weather follow.
+        /// </summary>
+        public void SetDay(int day)
+        {
+            day = Mathf.Max(1, day);
+            if (day == _day) return;
+            _day = day;
+            OnDayChanged?.Invoke(_day);
+        }
+
         private void ToggleFastForward()
         {
             FastForward = !FastForward;

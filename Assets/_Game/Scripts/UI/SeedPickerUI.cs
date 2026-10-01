@@ -15,9 +15,14 @@ namespace AnimalFarm.UI
     /// First option is "Grass" (sows the cell green instead of planting), then
     /// one button per seed species (with a small grey growth-time line) plus a
     /// "Nothing" cancel button; number keys 1-9 pick an option too (1 = Grass,
-    /// crops from 2). Gameplay input is blocked while open (DebugConsole
-    /// pattern). Closing is via the buttons only — Escape is reserved for
-    /// Pause. The panel is built once on first open and reused.
+    /// crops from 2). Seeds are LIMITED ITEMS now (owner spec): every option
+    /// row shows the owned packet count ("(x N)"), rows with none owned render
+    /// disabled-grey with a "(buy at the vendor)" sub-line, and picking
+    /// consumes one matching seed item (ids "seed_grass", "seed_&lt;speciesId&gt;")
+    /// before planting/sowing. The panel is rebuilt on every open so counts
+    /// stay fresh. Gameplay input is blocked while open (DebugConsole
+    /// pattern). Closing is via the buttons only - Escape is reserved for
+    /// Pause.
     /// </summary>
     public class SeedPickerUI : MonoBehaviour
     {
@@ -46,11 +51,12 @@ namespace AnimalFarm.UI
             if (_open) PollNumberKeys();
         }
 
-        /// <summary>Opens the picker targeting the given (empty dirt) cell.</summary>
+        /// <summary>Opens the picker targeting the given (empty dirt) cell.
+        /// The panel is rebuilt every time so the seed counts are current.</summary>
         public void Open(Vector2Int cell)
         {
             if (_open) return;
-            if (_panel == null && !BuildPanel()) return;
+            if (!BuildPanel()) return;
 
             _cell = cell;
             _panel.SetActive(true);
@@ -75,6 +81,11 @@ namespace AnimalFarm.UI
             }
         }
 
+        /// <summary>Inventory item id for one species' seed packet.</summary>
+        private static string SeedItemId(PlantSpecies species) => "seed_" + species.id;
+
+        private const string GrassSeedId = "seed_grass";
+
         private void Pick(PlantSpecies species)
         {
             var cell = _cell;
@@ -82,19 +93,32 @@ namespace AnimalFarm.UI
 
             if (species == null || PlantManager.Instance == null) return;
 
-            // Seeds are FREE this slice — no inventory consumption.
-            var plant = PlantManager.Instance.PlantSeed(species, cell);
-            if (plant == null) return;
+            var grid = TerrainGrid.Instance;
+            Vector3 at = grid != null ? grid.CellCenterWorld(cell) : Vector3.zero;
 
-            if (TerrainGrid.Instance != null)
+            // Seeds are limited items: one packet per planting.
+            string seedId = SeedItemId(species);
+            var inv = Inventory.Instance;
+            if (inv == null || !inv.Consume(seedId, 1))
             {
-                string label = !string.IsNullOrEmpty(species.displayName) ? species.displayName : species.id;
-                FloatingText.Show(TerrainGrid.Instance.CellCenterWorld(cell), "Planted " + label, PlantedColor);
+                FloatingText.Show(at, "(no seeds)", UIStyle.Danger);
+                return;
             }
+
+            var plant = PlantManager.Instance.PlantSeed(species, cell);
+            if (plant == null)
+            {
+                inv.Add(seedId, 1); // owner law: never charge for nothing
+                return;
+            }
+
+            string label = !string.IsNullOrEmpty(species.displayName) ? species.displayName : species.id;
+            FloatingText.Show(at, "Planted " + label, PlantedColor);
+            AnimalFarm.Core.ShepherdProgress.Grant("plant");
         }
 
         /// <summary>"Grass" option: sows the (still empty dirt) cell green
-        /// instead of planting a crop. Moved here from the old belt tool.</summary>
+        /// instead of planting a crop. Consumes one "seed_grass" packet.</summary>
         private void PickGrass()
         {
             var cell = _cell;
@@ -107,8 +131,22 @@ namespace AnimalFarm.UI
             if (grid.GetSurface(cell) != Surface.Dirt) return;
             if (PlantManager.Instance != null && PlantManager.Instance.HasPlantAt(cell)) return;
 
+            var inv = Inventory.Instance;
+            if (inv == null || !inv.Consume(GrassSeedId, 1))
+            {
+                FloatingText.Show(grid.CellCenterWorld(cell), "(no seeds)", UIStyle.Danger);
+                return;
+            }
+
             if (grid.SetSurface(cell, Surface.Grass))
+            {
                 FloatingText.Show(grid.CellCenterWorld(cell), "Sowed grass", PlantedColor);
+                AnimalFarm.Core.ShepherdProgress.Grant("sow");
+            }
+            else
+            {
+                inv.Add(GrassSeedId, 1); // owner law: never charge for nothing
+            }
         }
 
         private void PollNumberKeys()
@@ -132,11 +170,18 @@ namespace AnimalFarm.UI
 
         // ------------------------------------------------------------------ UI
 
-        /// <summary>Builds the panel once. False if the ToolController isn't up yet.</summary>
+        /// <summary>(Re)builds the panel. Called on every open so the owned
+        /// seed counts stay fresh. False if the ToolController isn't up yet.</summary>
         private bool BuildPanel()
         {
             var tools = FindFirstObjectByType<ToolController>();
             if (tools == null) return false;
+
+            if (_panel != null)
+            {
+                Destroy(_panel);
+                _panel = null;
+            }
 
             var root = UIRoot.GetRoot();
 
@@ -169,8 +214,14 @@ namespace AnimalFarm.UI
 
             _options.Clear();
 
-            // First option: Grass (number key 1) — sows the ground itself.
-            MakeOptionButton(panelRt, "Grass", "spreads green underfoot", PickGrass);
+            var inv = Inventory.Instance;
+
+            // First option: Grass (number key 1) - sows the ground itself.
+            int grassOwned = inv != null ? inv.Count(GrassSeedId) : 0;
+            MakeOptionButton(panelRt,
+                "Grass (x " + grassOwned + ")",
+                grassOwned > 0 ? "spreads green underfoot" : "(buy at the vendor)",
+                PickGrass, grassOwned > 0);
 
             var species = tools.SeedSpecies;
             if (species != null)
@@ -181,7 +232,8 @@ namespace AnimalFarm.UI
                     _options.Add(s);
 
                     var picked = s; // capture for the click closure
-                    MakeSeedButton(panelRt, picked, () => Pick(picked));
+                    int owned = inv != null ? inv.Count(SeedItemId(picked)) : 0;
+                    MakeSeedButton(panelRt, picked, owned, () => Pick(picked));
                 }
             }
 
@@ -191,26 +243,33 @@ namespace AnimalFarm.UI
             return true;
         }
 
-        private static void MakeSeedButton(Transform parent, PlantSpecies species, UnityEngine.Events.UnityAction onClick)
+        private static void MakeSeedButton(Transform parent, PlantSpecies species, int owned, UnityEngine.Events.UnityAction onClick)
         {
-            string label = !string.IsNullOrEmpty(species.displayName) ? species.displayName : species.id;
+            string name = !string.IsNullOrEmpty(species.displayName) ? species.displayName : species.id;
+            string label = name + " (x " + owned + ")";
 
             int stages = species.stageSprites != null ? species.stageSprites.Length - 1 : 0;
             float hours = Mathf.Max(0, stages) * Mathf.Max(0f, species.hoursPerStage);
-            string subLabel = hours > 0f
-                ? "grows in " + hours.ToString("0.#", CultureInfo.InvariantCulture) + "h"
-                : "grows instantly";
+            string subLabel = owned <= 0
+                ? "(buy at the vendor)"
+                : hours > 0f
+                    ? "grows in " + hours.ToString("0.#", CultureInfo.InvariantCulture) + "h"
+                    : "grows instantly";
 
-            MakeOptionButton(parent, label, subLabel, onClick);
+            MakeOptionButton(parent, label, subLabel, onClick, owned > 0);
         }
 
-        /// <summary>Two-line option button (label + small grey sub-line).</summary>
-        private static void MakeOptionButton(Transform parent, string label, string subLabel, UnityEngine.Events.UnityAction onClick)
+        /// <summary>Two-line option button (label + small grey sub-line).
+        /// Disabled rows (no seeds owned) render grey and ignore clicks.</summary>
+        private static void MakeOptionButton(Transform parent, string label, string subLabel,
+            UnityEngine.Events.UnityAction onClick, bool enabled)
         {
-            var button = MakeButtonBase(parent, label, 68f, onClick);
+            var button = MakeButtonBase(parent, label, 68f, enabled ? onClick : null);
+            button.interactable = enabled;
             var rt = (RectTransform)button.transform;
 
-            var text = UIRoot.MakeText(rt, "Label", 26, TextAnchor.MiddleCenter, UIStyle.Cream);
+            var text = UIRoot.MakeText(rt, "Label", 26, TextAnchor.MiddleCenter,
+                enabled ? UIStyle.Cream : UIStyle.Grey);
             text.text = label;
             var textRt = text.rectTransform;
             textRt.anchorMin = new Vector2(0f, 0.4f);
@@ -255,7 +314,7 @@ namespace AnimalFarm.UI
             button.targetGraphic = bg;
             UIStyle.StyleButton(button);
 
-            button.onClick.AddListener(onClick);
+            if (onClick != null) button.onClick.AddListener(onClick);
             return button;
         }
     }

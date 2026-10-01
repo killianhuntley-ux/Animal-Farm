@@ -5,6 +5,9 @@ namespace AnimalFarm.Spirits
 {
     public enum ActivityWindow { Always, Day, Night }
 
+    /// <summary>Optional hangout anchor a species drifts near (muscle 03).</summary>
+    public enum HabitatPreference { None, Rocks, Water, LightsAtNight }
+
     /// <summary>Shape of a species' bespoke final wish (slice 04).</summary>
     public enum FinalTaskKind
     {
@@ -41,6 +44,23 @@ namespace AnimalFarm.Spirits
         [Header("Behaviour")]
         public ActivityWindow activity = ActivityWindow.Always;
         public float wanderSpeed = 1.6f;
+
+        [Header("Personality (muscle 03 - idle quirks + habitat habit)")]
+        [Tooltip("Optional anchor this species periodically hangs out near. Degrades to plain wandering when the scene has none.")]
+        public HabitatPreference habitatPreference = HabitatPreference.None;
+        [Tooltip("Idle micro-moment weights (relative frequency; 0 disables one).")]
+        public float napWeight = 1f;
+        public float stretchWeight = 1f;
+        public float hopWeight = 1f;
+        public float leafChaseWeight = 1f;
+
+        [Header("Voice (synth chirps; owner mic gibberish replaces at skin phase)")]
+        [Tooltip("Base chirp frequency in Hz.")]
+        public float voiceBasePitch = 520f;
+        [Tooltip("-1..1: chirps slide down (negative) or up (positive); magnitude = up to half an octave.")]
+        public float voiceContour = 0.5f;
+        [Tooltip("Length of one chirp in seconds.")]
+        public float voiceChirpSeconds = 0.09f;
 
         [Header("Needs & Spirit (morale, 0..100)")]
         [Tooltip("Game-hours from fully fed back to hungry.")]

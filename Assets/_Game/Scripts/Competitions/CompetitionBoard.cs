@@ -92,18 +92,20 @@ namespace AnimalFarm.Competitions
         {
             if (Inventory.Instance == null) return;
 
-            string itemId;
-            int count;
+            // Prize purses (slice 09 economy): obols, scaled by difficulty.
+            // Same purse for every event; the entry fee was already paid in
+            // CompetitionEntryUI.
+            int obols;
             switch (Mathf.Clamp(CompetitionEntryUI.LastDifficulty, 0, 2))
             {
-                case 0: itemId = "wheat"; count = 3; break;
-                case 1: itemId = "berry"; count = 3; break;
-                default: itemId = "bloom"; count = 2; break;
+                case 0: obols = 15; break;
+                case 1: obols = 40; break;
+                default: obols = 100; break;
             }
 
-            Inventory.Instance.Add(itemId, count);
+            Inventory.Instance.Add("coin", obols);
             FloatingText.Show(transform.position + Vector3.up * 0.8f,
-                "Prize: " + itemId + " x" + count, PrizeGold);
+                "Prize: " + obols + " obols", PrizeGold);
         }
 
         // ------------------------------------------------------- IInteractable
