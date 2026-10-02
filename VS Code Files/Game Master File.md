@@ -147,12 +147,14 @@
 > **Economic/organic gating is primary — no explicit player level.** Money → new zones → new materials, new competitions, new spirit types. Expansion *is* the progression system. Fame accrues to individual spirits (competition record), not a separate player-XP track. ⏳ open: whether shepherd reputation exists as a soft secondary gate (e.g. prestige events requiring N ascensions).
 
 ### 3.5 Economy
-> **Currency — LOCKED (owner, 2026-10-01): coins, themed as OBOLS** — the ferryman's toll; the whole economy is coin-based, in line with the conceit.
+> **Currency — LOCKED (owner, 2026-10-01): coins, themed as OBOLS** — a coin for the dead; the whole economy is coin-based, in line with the conceit.
 > **Income:** selling plants/produce · **spirit essence** — happy spirits passively shed a little of their spirit as a harvestable byproduct (the candiosity analogue: contentment *is* production) · competition prize money.
 > **Sinks:** land purchases (primary) · competition entry fees · helpers/supervisor equipment · buildings · seeds/materials.
 > **Spirits are never sold** — essence replaces the sell-the-creature economy; fits the fiction.
 > **Essence — LOCKED (owner, 2026-10-01): dual-purpose.** Sell it for obols, or save it as the **Weave ritual's toll** — deeper/more complex weaves cost more essence. The sell-vs-save tension is the point.
-> **Land expansion — LOCKED (owner, 2026-10-01):** Cities-Skylines-style **parcel overview via the Ferryman**: inspect parcels (stats, price), buy with obols; price scales with distance from the farm. Muscle phase: mini-map preview + per-parcel terrain stats.
+> **CHARON RULE — LOCKED (owner, 2026-10-01):** Charon / the Ferryman appears **ONLY** in the Styx crossing (ascension) ceremony — never as a vendor, land seller, road-rights seller, toll taker, MC, or in any other dialogue. Land deeds are sold by **The Registrar** (underworld land clerk, Land Office stall in town; name is a placeholder pending owner confirmation). Obols stay the currency. This overrides every earlier "Ferryman sells land" line in this file and the slice/muscle docs.
+
+> **Land expansion — LOCKED (owner, 2026-10-01):** Cities-Skylines-style **parcel overview via the Land Office (The Registrar -- see Charon rule)**: inspect parcels (stats, price), buy with obols; price scales with distance from the farm. Muscle phase: mini-map preview + per-parcel terrain stats.
 
 ### 3.6 NPCs / Services
 > **The friction cast — locked (all three):**
@@ -160,7 +162,7 @@
 > - **The Rival Shepherd** *(Pester analogue)* — poaches lured spirits at your borders before they commit residency; escalates with your fame; each comfort-solution eventually gets a counter-counter (research §5.3 escalation pattern).
 > - **Feral Spirits** *(sour track)* — grief-twisted spirits wandering in from deep regions, spooking the flock until soothed/tamed. Taming one first-time = permanent ward progress + parallel collection layer. Recolour + behaviour-swap on existing rigs = near-free content (research §5.4).
 >
-> **Service NPC roster — PROPOSED DRAFT (react/replace):** a general vendor (seeds, materials, food) · a builder (structures, supervisor equipment) · **the Ferryman** (sells land deeds — expansion is literally buying passage into new territory; also the competition circuit's master of ceremonies?) · a healer/medium (morale recovery services). Lean cast; each must have one clear mechanical job (research §4.4).
+> **Service NPC roster — PROPOSED DRAFT (react/replace):** a general vendor (seeds, materials, food) · a builder (structures, supervisor equipment) · ~~**the Ferryman**~~ **The Registrar** per Charon rule (sells land deeds — expansion is literally buying passage into new territory; also the competition circuit's master of ceremonies?) · a healer/medium (morale recovery services). Lean cast; each must have one clear mechanical job (research §4.4).
 >
 > **The Town (owner decision, 2026-09-29):** shops live in a **physical town a short walk from the starting area** — no VP-style scroll-wheel shop menu. The player walks there, embodied (pillar 3). Spirits can come along: feed a **"follow me" treat** to make a resident follow for a period (the treat item formalizes the altar-guiding follow mechanic from §2.2). Town is also the natural home for competition sign-up. Scoped into slice 09.
 

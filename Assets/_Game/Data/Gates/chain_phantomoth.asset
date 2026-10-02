@@ -15,5 +15,5 @@ MonoBehaviour:
   chainId: phantomoth
   appear: {fileID: 11400000, guid: cd18711999e473d45859dff08166ffda, type: 2}
   visit: {fileID: 11400000, guid: 55baf71afdacc1a4f983ed21663f1be8, type: 2}
-  resident: {fileID: 11400000, guid: 55baf71afdacc1a4f983ed21663f1be8, type: 2}
+  resident: {fileID: 11400000, guid: 5665f1b0bf43342498c8b38630ea2d26, type: 2}
   fulfil: {fileID: 0}

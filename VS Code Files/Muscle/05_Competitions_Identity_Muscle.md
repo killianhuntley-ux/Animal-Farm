@@ -3,6 +3,29 @@
 **Skeleton status:** Boulder Trial + The Crossing race built and piloted; spirit identity (naming, journal, Nature stats 2-9, inspect UI) built.
 All verdicts are owner decisions, 2026-09-30 (question-round format).
 
+## Build status (2026-10-01, wave 2)
+
+Compiled clean, awaiting owner playtest.
+
+**BUILT (by build-list item)**
+1. Calendar core - 15-day seasons (The Hush, The Weep, The Smolder, The Long Dim), tints, HUD date button, month-grid calendar page (C).
+2. Season hooks - PARTIAL: `SeasonIs` condition atom and per-season rain weights (10 / 55 / 5 / 30 %). No species is season-gated yet.
+3. Species stat bands - min/max per stat per species, individual roll inside the band, journal/inspector read "Vigor 4 (3-7)".
+4. Traits - nine traits (brave, curious, dreamy, gentle, greedy, lazy, rowdy, show-off, skittish), 1-2 per spirit with conflicts, weights on idle quirks and training appetite, flavor text, saved.
+5. Training buildings - Heavy Stones (30 obols, Vigor), Hurdle Run (30, Grace), Gleam Mirror (40, Gleam); passive sessions; food-bait slot.
+
+**NOT BUILT**
+- 6. Competition mothball: the Competition Board still opens and the Boulder Trial and the race remain playable; no "returns with the festival season" text (owner question 6).
+- A physical calendar board in town (the date button + C page exist).
+- Season-gated silhouettes (condition support only) and scripted festivals.
+- Villain season weighting (owner question 2) - see Muscle 07.
+
+**ASSUMPTIONs made in build**
+- Training: 6 training ticks = +1 stat point, +1 tick per 8-second session, capacity 2 per building, never above the species max; spirits skip training when mood is Low or hunger is over 80%.
+- Bait: 2 charges per food item, 6 charges max; a matching species is 3x as keen and gains x1.5 per session.
+- Stat bands (Vigor / Grace / Gleam): Mausoleum 2-5 / 4-8 / 3-7; Bansheep 5-9 / 2-5 / 3-7; Wrabbit 3-6 / 6-10 / 2-6; Phantomoth 2-4 / 5-9 / 5-10; Wailpertinger 5-9 / 5-9 / 4-8; Mothmaus 2-5 / 4-8 / 6-10; Bogwick 2-4 / 4-8 / 5-10; Reedhen 3-6 / 5-9 / 3-7; Sloughling 4-8 / 2-5 / 2-6.
+- Season names and the rain percentages are placeholders for the owner to rename.
+
 ---
 
 ## Verdicts (locked)

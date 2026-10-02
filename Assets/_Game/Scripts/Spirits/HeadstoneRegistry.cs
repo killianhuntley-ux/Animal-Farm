@@ -34,6 +34,10 @@ namespace AnimalFarm.Spirits
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+
+            // Muscle 04: the garden grows itself around placed stones; created
+            // here so no scene wiring is needed (derived from stones, no save state).
+            if (GetComponent<MemorialGarden>() == null) gameObject.AddComponent<MemorialGarden>();
         }
 
         private void OnDestroy()
@@ -46,7 +50,9 @@ namespace AnimalFarm.Spirits
         public Headstone CreateHeadstone(SpiritAgent spirit)
         {
             _all.RemoveAll(h => h == null);
-            return CreateHeadstoneAt(spirit, SlotPosition(_all.Count));
+            var stone = CreateHeadstoneAt(spirit, SlotPosition(_all.Count));
+            if (stone != null) stone.MarkPlaced(); // auto-grid stones are already resting
+            return stone;
         }
 
         /// <summary>
@@ -70,8 +76,30 @@ namespace AnimalFarm.Spirits
             float daysAmongUs = Mathf.Max(0f, (totalHours - spirit.ResidentSinceTotalHours) / 24f);
 
             _all.RemoveAll(h => h == null);
-            return Spawn(spiritName, speciesId, speciesDisplay,
+            var stone = Spawn(spiritName, speciesId, speciesDisplay,
                 spirit.TimesFed, ascendedDay, daysAmongUs, pos);
+            if (stone != null && clock != null) stone.CrossedHour = clock.Hours;
+            return stone;
+        }
+
+        /// <summary>
+        /// Console/QA only: lays a stone with no live spirit (species display
+        /// name resolved from the known species). Placed stones start their
+        /// garden clock now; unplaced ones wait like a fresh crossing drop.
+        /// </summary>
+        public Headstone Debug_CreateStone(string spiritName, string speciesId, Vector3 pos, bool placed)
+        {
+            var species = SpiritManager.Instance != null ? SpiritManager.Instance.FindSpecies(speciesId) : null;
+            var clock = GameClock.Instance;
+            _all.RemoveAll(h => h == null);
+            var stone = Spawn(spiritName, speciesId,
+                species != null ? species.displayName : "Spirit",
+                UnityEngine.Random.Range(4, 20), clock != null ? clock.Day : 0, UnityEngine.Random.Range(3f, 15f), pos);
+            if (stone == null) return null;
+            if (clock != null) stone.CrossedHour = clock.Hours;
+            stone.Witnesses = UnityEngine.Random.Range(0, 5);
+            if (placed) stone.MarkPlaced();
+            return stone;
         }
 
         /// <summary>Grid slots run right along a row, then up to the next row.</summary>
@@ -119,6 +147,13 @@ namespace AnimalFarm.Spirits
             public int ascendedDay;
             public float daysAmongUs;
             public float x, y;
+            // Memorial garden (version 2). Older saves lack these (v == 0) and
+            // restore as placed, aged from their ascension day.
+            public int v;
+            public bool placed;
+            public float placedHours;
+            public float crossedHour;
+            public int witnesses;
         }
 
         [Serializable]
@@ -141,7 +176,12 @@ namespace AnimalFarm.Spirits
                     ascendedDay = stone.AscendedDay,
                     daysAmongUs = stone.DaysAmongUs,
                     x = stone.transform.position.x,
-                    y = stone.transform.position.y
+                    y = stone.transform.position.y,
+                    v = 2,
+                    placed = stone.Placed,
+                    placedHours = stone.PlacedHours,
+                    crossedHour = stone.CrossedHour,
+                    witnesses = stone.Witnesses
                 });
             }
             return JsonUtility.ToJson(state);
@@ -159,9 +199,21 @@ namespace AnimalFarm.Spirits
 
             foreach (var record in state.stones)
             {
-                Spawn(record.name, record.speciesId, record.speciesDisplay,
+                var stone = Spawn(record.name, record.speciesId, record.speciesDisplay,
                     record.timesFed, record.ascendedDay, record.daysAmongUs,
                     new Vector3(record.x, record.y, 0f));
+                if (stone == null) continue;
+
+                if (record.v >= 2)
+                {
+                    stone.SetPlacement(record.placed, record.placedHours);
+                    stone.CrossedHour = record.crossedHour;
+                    stone.Witnesses = record.witnesses;
+                }
+                else
+                {
+                    stone.SetPlacement(true, Mathf.Max(0, record.ascendedDay - 1) * 24f);
+                }
             }
         }
     }

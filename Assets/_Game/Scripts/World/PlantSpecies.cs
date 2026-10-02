@@ -24,5 +24,20 @@ namespace AnimalFarm.World
         public int produceAmount = 1;
 
         public Color tint = Color.white;
+
+        [Header("Muscle 02")]
+        [Tooltip("Berry-bush style: harvesting drops the plant back to regrowStage instead of removing it.")]
+        public bool regrows;
+
+        [Tooltip("Stage index a regrowing plant returns to after harvest.")]
+        public int regrowStage = 1;
+
+        [Tooltip("Water species only (requiredSurface = Water): plantable on shallow-rim water cells only.")]
+        public bool shallowOnly;
+
+        /// <summary>True if this species can root on the given ground: its required
+        /// surface, plus rich Mud for every tilled-soil (Dirt) crop.</summary>
+        public bool GrowsOn(Surface s) =>
+            s == requiredSurface || (requiredSurface == Surface.Dirt && s == Surface.Mud);
     }
 }

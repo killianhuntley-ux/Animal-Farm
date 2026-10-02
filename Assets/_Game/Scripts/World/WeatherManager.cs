@@ -37,6 +37,8 @@ namespace AnimalFarm.World
         private AudioSource _rainAudio;
         private float _nextWaterAt;
         private bool _pauseSubscribed;
+        private bool _rainLoopStarted;
+        private float _nextRainTryAt;
 
         /// <summary>
         /// Returns the live manager, creating one on the fly if the scene
@@ -98,7 +100,16 @@ namespace AnimalFarm.World
             if (!IsRaining) return;
 
             if (_rainAudio != null)
-                _rainAudio.mute = Bleeps.Muted;
+            {
+                // Ambience bus mute/solo/kill and the Ambience volume apply every frame.
+                _rainAudio.mute = Bleeps.Muted || !AudioGuard.IsAudible(AudioBus.Ambience);
+                _rainAudio.volume = RainSoundVolume * AudioGuard.AmbienceVolume;
+
+                // Loop start was refused by the guard (muted at the time)? Retry every 2 s.
+                bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
+                if (!_rainLoopStarted && !paused && Time.unscaledTime >= _nextRainTryAt)
+                    TryStartRainLoop();
+            }
 
             if (Time.time >= _nextWaterAt)
             {
@@ -139,7 +150,7 @@ namespace AnimalFarm.World
                     _rainParticles.Play();
                 }
                 if (_rainAudio != null && !(GameManager.Instance != null && GameManager.Instance.IsPaused))
-                    _rainAudio.Play();
+                    TryStartRainLoop();
 
                 _nextWaterAt = Time.time; // first soak lands immediately
             }
@@ -149,9 +160,20 @@ namespace AnimalFarm.World
                     _rainParticles.Stop(true, ParticleSystemStopBehavior.StopEmitting);
                 if (_rainAudio != null)
                     _rainAudio.Stop();
+                _rainLoopStarted = false;
             }
 
             RainChanged?.Invoke(on);
+        }
+
+        /// <summary>Starts the rain loop through the AudioGuard (Ambience bus).</summary>
+        private void TryStartRainLoop()
+        {
+            _nextRainTryAt = Time.unscaledTime + 2f;
+            if (_rainAudio == null || _rainLoopStarted) return;
+            if (!AudioGuard.TryPlay(AudioBus.Ambience, "rain", RainSoundVolume, 0f)) return;
+            _rainAudio.Play();
+            _rainLoopStarted = true;
         }
 
         private void OnPauseChanged(bool paused)
@@ -254,33 +276,40 @@ namespace AnimalFarm.World
             const int sampleRate = 44100;
             const float seconds = 3f;
             int count = Mathf.CeilToInt(seconds * sampleRate);
+            int fade = Mathf.CeilToInt(0.15f * sampleRate);
             var data = new float[count];
+            var n = new float[count + fade]; // extra noise past the end feeds the seam cross-fade
 
             var rng = new System.Random(4242); // deterministic noise
             float hiss = 0f;   // dulled patter layer
             float rumble = 0f; // low wash layer
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < count + fade; i++)
             {
                 float white = (float)rng.NextDouble() * 2f - 1f;
                 hiss += 0.12f * (white - hiss);
                 rumble += 0.025f * (white - rumble);
 
-                // Slow swell; exactly one cycle over the clip so the loop seam
-                // carries no level jump.
-                float t = i / (float)sampleRate;
-                float swell = 1f + 0.15f * Mathf.Sin(2f * Mathf.PI * t / seconds);
+                // Slow swell; exactly periodic over `count` samples so the loop
+                // seam carries no level jump.
+                float swell = 1f + 0.15f * Mathf.Sin(2f * Mathf.PI * i / count);
 
                 float sample = (0.9f * hiss + 1.6f * rumble) * 0.45f * swell;
-                data[i] = Mathf.Clamp(sample, -0.3f, 0.3f);
+                n[i] = Mathf.Clamp(sample, -0.3f, 0.3f);
             }
 
-            // Cross-fade the tail into the head so the noise loops without a click.
-            int fade = Mathf.CeilToInt(0.15f * sampleRate);
-            for (int i = 0; i < fade; i++)
+            // Head blends from the continuation of the tail (n[count + i]) into the
+            // original noise, so the last sample flows straight into the first.
+            for (int i = 0; i < count; i++)
             {
-                float a = i / (float)fade;
-                int tail = count - fade + i;
-                data[tail] = data[tail] * (1f - a) + data[i] * a;
+                if (i < fade)
+                {
+                    float a = i / (float)fade;
+                    data[i] = n[i] * a + n[count + i] * (1f - a);
+                }
+                else
+                {
+                    data[i] = n[i];
+                }
             }
 
             var clip = AudioClip.Create("RainLoop", count, 1, sampleRate, false);

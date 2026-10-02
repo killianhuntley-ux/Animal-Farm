@@ -12,7 +12,7 @@ namespace AnimalFarm.Onboarding
     /// </summary>
     public class GuideLight : MonoBehaviour
     {
-        private enum Mode { Idle, PointPosition, PointTransform, Follow }
+        private enum Mode { Idle, PointPosition, PointTransform, Follow, Ceremony }
 
         // ---- tuning ----------------------------------------------------------
 
@@ -99,6 +99,7 @@ namespace AnimalFarm.Onboarding
         /// <summary>Drift over and hover above a fixed world position.</summary>
         public void PointAt(Vector3 worldPos)
         {
+            if (_mode == Mode.Ceremony) return; // a ceremony owns the light
             _mode = Mode.PointPosition;
             _pointPosition = new Vector3(worldPos.x, worldPos.y, 0f);
         }
@@ -106,6 +107,7 @@ namespace AnimalFarm.Onboarding
         /// <summary>Drift over and hover above a moving target (live-updating).</summary>
         public void PointAt(Transform target)
         {
+            if (_mode == Mode.Ceremony) return;
             if (target == null) { FollowShepherd(); return; }
             _mode = Mode.PointTransform;
             _pointTransform = target;
@@ -114,6 +116,7 @@ namespace AnimalFarm.Onboarding
         /// <summary>Idle near the shepherd (up-right offset, lazy drift).</summary>
         public void FollowShepherd()
         {
+            if (_mode == Mode.Ceremony) return;
             _mode = Mode.Follow;
             _pointTransform = null;
         }
@@ -124,12 +127,47 @@ namespace AnimalFarm.Onboarding
             _fadeTarget = visible ? 1f : 0f;
         }
 
+        /// <summary>True when the light is (fading) in rather than out.</summary>
+        public bool WantsVisible => _fadeTarget > 0f;
+
+        /// <summary>
+        /// Naming ceremony (muscle 03): hands the light's position to the
+        /// caller (SetCeremonyPosition each frame, so it can run on real time
+        /// while the world is softened). Starts at <paramref name="startPos"/>.
+        /// </summary>
+        public void BeginCeremony(Vector3 startPos)
+        {
+            _mode = Mode.Ceremony;
+            _pointTransform = null;
+            _velocity = Vector3.zero;
+            transform.position = new Vector3(startPos.x, startPos.y, 0f);
+        }
+
+        /// <summary>Ceremony mode only: place the light exactly (no smoothing).</summary>
+        public void SetCeremonyPosition(Vector3 worldPos)
+        {
+            if (_mode != Mode.Ceremony) return;
+            transform.position = new Vector3(worldPos.x, worldPos.y, 0f);
+        }
+
+        /// <summary>Gives the light back: it drifts to the shepherd as usual.</summary>
+        public void EndCeremony()
+        {
+            if (_mode != Mode.Ceremony) return;
+            _velocity = Vector3.zero;
+            transform.localScale = Vector3.one;
+            _mode = Mode.Idle; // release the lock, then resume the lazy follow
+            FollowShepherd();
+        }
+
         // ---- per-frame -----------------------------------------------------------
 
         private void Update()
         {
             TickFade();
             if (_fade <= 0f) return; // fully faded out: hold position, skip motion
+
+            if (_mode == Mode.Ceremony) { TickPulse(); return; } // position driven by the ceremony
 
             Vector3 target;
             float smoothTime;

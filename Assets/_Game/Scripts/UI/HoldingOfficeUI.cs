@@ -56,7 +56,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -141,8 +141,9 @@ namespace AnimalFarm.UI
                 if (string.IsNullOrEmpty(food)) food = "food";
 
                 int index = i; // capture for the click closure
+                int haveFood = CropQuality.CountAny(Inventory.Instance, food);
                 var button = UIStyle.MakeButton(parent,
-                    "Reclaim " + who + " - 2x " + food,
+                    "Reclaim " + who + " - 2x " + food + " (have " + haveFood + ")",
                     () => OnReclaimClicked(index), 24);
                 ((RectTransform)button.transform).sizeDelta = new Vector2(0f, 56f);
             }

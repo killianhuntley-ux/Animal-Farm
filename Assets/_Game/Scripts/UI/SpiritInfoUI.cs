@@ -43,6 +43,9 @@ namespace AnimalFarm.UI
 
         private bool _subscribed;
         private bool _renaming;
+
+        /// <summary>True while the rename field holds TextInputActive.</summary>
+        public bool IsRenaming => _renaming;
         private float _refreshTimer;
 
         // ---- kept references into the built content (value-only refresh) ------
@@ -52,6 +55,7 @@ namespace AnimalFarm.UI
         private RectTransform _spiritFillRt;
         private Image _spiritFill;
         private Text _hungerText;
+        private Text _groundText; // muscle 02: current ground + how it feels
         private Text _fameText;
         private Text _checkHomeText;
         private Text _checkSpiritText;
@@ -63,6 +67,7 @@ namespace AnimalFarm.UI
         private SpiritState _builtState;
         private bool _builtFameSection;
         private bool _builtWishHint;
+        private int _builtStatSig; // stats + traits (training changes them live)
 
         private bool IsOpen => _panel != null && _panel.activeSelf;
 
@@ -210,7 +215,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -311,6 +316,7 @@ namespace AnimalFarm.UI
             _spiritFillRt = null;
             _spiritFill = null;
             _hungerText = null;
+            _groundText = null;
             _fameText = null;
             _checkHomeText = null;
             _checkSpiritText = null;
@@ -322,6 +328,7 @@ namespace AnimalFarm.UI
             _builtState = _agent.State;
             _builtFameSection = _agent.CompetitionEntries > 0;
             _builtWishHint = WantsWishHint();
+            _builtStatSig = _agent.StatSignature;
 
             BuildPortrait(species);
             BuildNameRow();
@@ -342,6 +349,12 @@ namespace AnimalFarm.UI
             BuildSpiritBar();
 
             _hungerText = AddText("", 22, TextBright, 28f);
+
+            // Muscle 02: what this species loves / hates, and how its ground feels right now.
+            var biomes = AddText("Biomes: " + BiomeAffinity.Describe(species), 20, TextGrey, 0f);
+            biomes.horizontalOverflow = HorizontalWrapMode.Wrap;
+            AutoHeight(biomes, 2);
+            _groundText = AddText("", 22, TextBright, 28f);
 
             UIStyle.MakeDivider(_content);
             BuildNatureBlock();
@@ -386,7 +399,8 @@ namespace AnimalFarm.UI
             // a matching signature, so this cannot loop).
             if (_agent.State != _builtState
                 || (_agent.CompetitionEntries > 0) != _builtFameSection
-                || WantsWishHint() != _builtWishHint)
+                || WantsWishHint() != _builtWishHint
+                || _agent.StatSignature != _builtStatSig)
             {
                 RebuildContent();
                 return;
@@ -418,6 +432,12 @@ namespace AnimalFarm.UI
 
             if (_hungerText != null)
                 _hungerText.text = "Hunger: " + HungerWord(_agent.Hunger01);
+
+            if (_groundText != null)
+                _groundText.text = _agent.GroundBase < 0
+                    ? "Ground: beyond the fences"
+                    : "Ground: " + BiomeAffinity.BiomeName(_agent.GroundBiome)
+                        + " - " + BiomeAffinity.GroundFeeling(_agent.GroundAffinity);
 
             if (_fameText != null)
                 _fameText.text = "Competitions: " + _agent.CompetitionWins + " wins / "
@@ -575,39 +595,56 @@ namespace AnimalFarm.UI
 
         private void BuildNatureBlock()
         {
-            // Nature stats are rolled once at spawn and never change, so this
-            // block is static between rebuilds.
+            // Stats roll inside the species band at spawn and climb with
+            // training; the structural signature rebuilds this block on change.
             AddText("Nature", 24, BarGold, 30f);
-            AddStatRow("Vigor", _agent.Vigor);
-            AddStatRow("Grace", _agent.Grace);
-            AddStatRow("Gleam", _agent.Gleam);
-            AddText("Every spirit is born different.", 20, TextGrey, 24f);
+            AddStatRow(SpiritStat.Vigor);
+            AddStatRow(SpiritStat.Grace);
+            AddStatRow(SpiritStat.Gleam);
+
+            // Traits (muscle 05): names + one flavor line each.
+            var traits = _agent.Traits;
+            if (traits.Count > 0)
+            {
+                AddText("Traits: " + SpiritTraits.Describe(traits), 22, BarGold, 28f);
+                var lines = AddText(SpiritTraits.FlavorLines(traits), 20, TextGrey, 0f);
+                lines.horizontalOverflow = HorizontalWrapMode.Wrap;
+                AutoHeight(lines, traits.Count * 2);
+            }
+            else
+            {
+                AddText("Every spirit is born different.", 20, TextGrey, 24f);
+            }
         }
 
-        private void AddStatRow(string label, int value)
+        private void AddStatRow(SpiritStat stat)
         {
+            string label = SpiritStats.Label(stat);
+            int value = _agent.GetStat(stat);
             var row = MakeRow("Stat_" + label, 24f);
 
+            // "Vigor 4 (3-7)": the roll plus the species band it came from.
             var text = UIRoot.MakeText(row, "Label", 22, TextAnchor.MiddleLeft, TextBright);
-            text.text = label + " " + value + "/9";
+            text.text = SpiritStats.BandText(_agent.Species, stat, value);
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
             var textRt = text.rectTransform;
             textRt.anchorMin = new Vector2(0f, 0f);
             textRt.anchorMax = new Vector2(0f, 1f);
             textRt.pivot = new Vector2(0f, 0.5f);
-            textRt.sizeDelta = new Vector2(150f, 0f);
+            textRt.sizeDelta = new Vector2(170f, 0f);
             textRt.anchoredPosition = Vector2.zero;
 
-            const float barMax = 190f;
+            const float barMax = 170f;
 
             // Rounded mini-bar (fixed width, right of the label).
-            float frac = Mathf.Clamp01(value / 9f);
+            float frac = Mathf.Clamp01(value / (float)SpiritStats.Ceiling);
             var fill = UIStyle.MakeBar(row, "Bar", out var fillRt, StatBlue);
             var backRt = (RectTransform)fill.transform.parent;
             backRt.anchorMin = new Vector2(0f, 0.15f);
             backRt.anchorMax = new Vector2(0f, 0.85f);
             backRt.pivot = new Vector2(0f, 0.5f);
             backRt.sizeDelta = new Vector2(barMax, 0f);
-            backRt.anchoredPosition = new Vector2(160f, 0f);
+            backRt.anchoredPosition = new Vector2(180f, 0f);
             backRt.GetComponent<Image>().raycastTarget = false;
 
             // Fill width: inset 3px each side of the filled fraction.

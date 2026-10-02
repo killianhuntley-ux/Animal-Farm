@@ -38,7 +38,11 @@ namespace AnimalFarm.UI
         private GameObject _residentsArea;
         private RectTransform _residentsLeftColumn; // resident rows (Residents tab)
         private RectTransform _residentDetailPane;  // detail pane (Residents tab)
-        private RectTransform _legacyPane;
+        private RectTransform _legacyPane;           // Legacy tab area (holds the two columns below)
+        private RectTransform _legacyListColumn;     // crossed spirits, paged (Legacy tab)
+        private RectTransform _legacyDetailPane;     // selected spirit's page + "Woven away"
+        private Headstone _selectedStone;
+        private int _legacyPage;
         private GameObject _speciesArea;
         private Button _tabSpeciesButton;
         private Button _tabResidentsButton;
@@ -60,17 +64,74 @@ namespace AnimalFarm.UI
         private RectTransform _resSpiritFillRt;
         private Image _resSpiritFill;
         private Text _resHungerText;
+        private Text _resGroundText; // muscle 02: current ground + how it feels
         private Text _resFameText;
         private Text _resCheckHomeText;
         private Text _resCheckSpiritText;
         private Text _resCheckWishText;
 
+        public static JournalUI Instance { get; private set; }
+
+        /// <summary>True while the journal page is showing.</summary>
+        public bool IsOpen => _open;
+
+        private void Awake()
+        {
+            if (Instance == null) Instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>
+        /// Naming ceremony (muscle 03): opens straight to this resident's page
+        /// on the Residents tab, optionally with a quick page-flip. No-op when
+        /// the journal is already open (never toggles it closed).
+        /// </summary>
+        public void OpenToResident(SpiritAgent agent, bool flip)
+        {
+            if (_open) return;
+
+            _tab = Tab.Residents;
+            _selectedAgent = agent;
+            Toggle();
+            if (flip && _panel != null) StartCoroutine(PageFlip());
+        }
+
+        /// <summary>Horizontal page-turn: the panel unfolds from a thin edge (real time).</summary>
+        private System.Collections.IEnumerator PageFlip()
+        {
+            var rt = _panel != null ? _panel.transform as RectTransform : null;
+            if (rt == null) yield break;
+
+            const float duration = 0.35f;
+            for (float t = 0f; t < duration; t += Time.unscaledDeltaTime)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, t / duration);
+                rt.localScale = new Vector3(Mathf.Max(0.04f, k), 1f, 1f);
+                yield return null;
+            }
+            rt.localScale = Vector3.one;
+        }
+
         private void Update()
         {
             var kb = Keyboard.current;
-            if (kb != null && kb.jKey.wasPressedThisFrame
-                && !AnimalFarm.Core.UIInputLock.TextInputActive)
-                Toggle();
+            if (kb != null && kb.jKey.wasPressedThisFrame)
+            {
+                // Closed: full BlockDirectKeys check. Open: we ARE the modal, so only
+                // a live text field may eat the key (CalendarUI pattern).
+                if (_open)
+                {
+                    if (!AnimalFarm.Core.UIInputLock.TextInputActive) Toggle();
+                }
+                else if (!AnimalFarm.Core.UIInputLock.BlockDirectKeys)
+                {
+                    Toggle();
+                }
+            }
 
             if (!_open) return;
 
@@ -108,6 +169,10 @@ namespace AnimalFarm.UI
             _panel.SetActive(_open);
             if (_open) _panel.transform.SetAsLastSibling(); // render above the HUD
 
+            // A running ceremony owns the modal flag and the input block.
+            bool ceremony = AnimalFarm.Core.UIInputLock.CeremonyActive;
+            if (_open || !ceremony) AnimalFarm.Core.UIInputLock.ModalOpen = _open;
+
             if (GameInput.Instance != null)
             {
                 if (_open)
@@ -116,9 +181,9 @@ namespace AnimalFarm.UI
                 }
                 else
                 {
-                    // Don't hand input back if the pause menu still needs it blocked.
+                    // Don't hand input back if the pause menu or a ceremony still needs it blocked.
                     bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                    if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                    if (!paused && !ceremony) GameInput.Instance.SetGameplayBlocked(false);
                 }
             }
 
@@ -213,12 +278,29 @@ namespace AnimalFarm.UI
             _residentDetailPane.offsetMax = new Vector2(0f, 0f);
 
             // --- Legacy tab area. ----------------------------------------------
-            _legacyPane = MakeColumn(panelRt, "LegacyPane");
+            // Muscle 04 gallery: a split view (names left, the selected spirit's
+            // page right) like the Residents tab; _legacyPane is just the area.
+            _legacyPane = new GameObject("LegacyPane").AddComponent<RectTransform>();
+            _legacyPane.SetParent(panelRt, false);
             _legacyPane.anchorMin = Vector2.zero;
             _legacyPane.anchorMax = Vector2.one;
             _legacyPane.pivot = new Vector2(0f, 1f);
             _legacyPane.offsetMin = new Vector2(24f, 20f);
             _legacyPane.offsetMax = new Vector2(-24f, -120f);
+
+            _legacyListColumn = MakeColumn(_legacyPane, "LeftColumn");
+            _legacyListColumn.anchorMin = new Vector2(0f, 0f);
+            _legacyListColumn.anchorMax = new Vector2(0f, 1f);
+            _legacyListColumn.pivot = new Vector2(0f, 1f);
+            _legacyListColumn.offsetMin = new Vector2(0f, 0f);
+            _legacyListColumn.offsetMax = new Vector2(480f, 0f);
+
+            _legacyDetailPane = MakeColumn(_legacyPane, "DetailPane");
+            _legacyDetailPane.anchorMin = new Vector2(0f, 0f);
+            _legacyDetailPane.anchorMax = new Vector2(1f, 1f);
+            _legacyDetailPane.pivot = new Vector2(0f, 1f);
+            _legacyDetailPane.offsetMin = new Vector2(510f, 0f);
+            _legacyDetailPane.offsetMax = new Vector2(0f, 0f);
 
             _panel.SetActive(false);
         }
@@ -342,6 +424,7 @@ namespace AnimalFarm.UI
                         + (agent.IsFollowing ? 4 : 0)
                         + (agent.TaskDone ? 8 : 0);
                     h = h * 31 + (agent.GivenName != null ? agent.GivenName.GetHashCode() : 0);
+                    h = h * 31 + agent.StatSignature; // training raises stats live
                 }
                 return h;
             }
@@ -398,6 +481,17 @@ namespace AnimalFarm.UI
 
             if (level == SpiritManager.DiscoveryLevel.Unseen)
             {
+                // Muscle 06: an undiscovered cryptid is a "???" silhouette page
+                // with a hint slot for the rumors heard so far.
+                if (manager.IsWovenSpecies(selected.id))
+                {
+                    AddPortrait(_rightPane, selected.bodySprite, new Color(0.05f, 0.05f, 0.08f, 1f));
+                    AddLine(_rightPane, "???", 30, Cream);
+                    AddLine(_rightPane, "A thread nobody has pulled yet. It will take two.", 20, Muted);
+                    AddRumorLines(_rightPane, selected.id, true);
+                    return;
+                }
+
                 AddLine(_rightPane, "??? - nothing is known.", 24, Muted);
                 return;
             }
@@ -413,17 +507,33 @@ namespace AnimalFarm.UI
             if (!string.IsNullOrEmpty(selected.flavor))
                 AddLine(_rightPane, selected.flavor, 20, Muted);
 
-            AddLine(_rightPane, "Appears when:", 22, Cream);
-            AddConditionLines(_rightPane, selected.gateChain != null ? selected.gateChain.appear : null);
-
+            // Muscle 02: biome feelings are learned by meeting the species (Visited and beyond).
             if (level >= SpiritManager.DiscoveryLevel.Visited)
+                AddTwoLine(_rightPane, "Biomes: " + BiomeAffinity.Describe(selected), 20, Cream);
+
+            // Muscle 06: a cryptid has no gates - its page tells who it was woven from.
+            bool woven = manager.IsWovenSpecies(selected.id);
+            if (woven)
+            {
+                AddWovenLines(_rightPane, selected.id);
+            }
+            else
+            {
+                AddLine(_rightPane, "Appears when:", 22, Cream);
+                AddConditionLines(_rightPane, selected.gateChain != null ? selected.gateChain.appear : null);
+            }
+
+            if (level >= SpiritManager.DiscoveryLevel.Visited && !woven)
             {
                 AddLine(_rightPane, "Visits when:", 22, Cream);
                 AddConditionLines(_rightPane, selected.gateChain != null ? selected.gateChain.visit : null);
 
-                AddLine(_rightPane,
-                    "Befriend: feed " + selected.favoredFoodId + " x" + selected.residencyFoodCount,
-                    22, Cream);
+                // Muscle 11: nobody is talked into staying. The Stay gate is the whole list.
+                AddLine(_rightPane, "Stays when:", 22, Cream);
+                AddConditionLines(_rightPane, StayGate.SetOf(selected));
+                AddTwoLine(_rightPane,
+                    "It decides on its own. Gifts of " + selected.favoredFoodId + " are welcome, never required.",
+                    18, Muted);
             }
 
             if (level >= SpiritManager.DiscoveryLevel.Resident)
@@ -460,6 +570,60 @@ namespace AnimalFarm.UI
             img.preserveAspect = true;
             img.color = tint;
             img.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// Muscle 06 weave section of a discovered cryptid's species page:
+        /// every weave that made one ("Woven from X the wrabbit and Y the
+        /// bansheep") plus any rumors heard before it was found.
+        /// </summary>
+        private static void AddWovenLines(RectTransform pane, string speciesId)
+        {
+            AddLine(pane, "Woven at the Loom", 22, Cream);
+
+            var archive = WeaveArchive.Instance;
+            var weaves = archive != null ? archive.WeavesFor(speciesId) : null;
+            if (weaves == null || weaves.Count == 0)
+            {
+                AddLine(pane, "(no thread remembers how)", 20, Muted);
+            }
+            else
+            {
+                int first = Mathf.Max(0, weaves.Count - 4); // latest few
+                for (int i = first; i < weaves.Count; i++)
+                    AddTwoLine(pane, "Woven from " + WovenFromText(weaves[i]), 20, Muted);
+            }
+
+            AddRumorLines(pane, speciesId, false);
+        }
+
+        /// <summary>"Pip the wrabbit and Wisp the bansheep".</summary>
+        private static string WovenFromText(WeaveArchive.WeaveRecord r) =>
+            r.parentAName + " the " + r.parentASpeciesName.ToLowerInvariant()
+            + " and " + r.parentBName + " the " + r.parentBSpeciesName.ToLowerInvariant();
+
+        /// <summary>The hint slot: rumors heard about a cryptid (or a "none yet" line when asked to).</summary>
+        private static void AddRumorLines(RectTransform pane, string speciesId, bool showEmpty)
+        {
+            var archive = WeaveArchive.Instance;
+            var rumors = archive != null ? archive.RumorsFor(speciesId) : null;
+            if (rumors == null || rumors.Count == 0)
+            {
+                if (showEmpty) AddLine(pane, "Rumors: none heard yet.", 20, Muted);
+                return;
+            }
+
+            AddLine(pane, "Rumors heard:", 20, Gold);
+            for (int i = 0; i < rumors.Count; i++)
+                AddTwoLine(pane, "\"" + rumors[i].text + "\" - " + rumors[i].teller, 18, Muted);
+        }
+
+        /// <summary>AddLine with room for two wrapped lines.</summary>
+        private static Text AddTwoLine(RectTransform parent, string content, int size, Color color)
+        {
+            var text = AddLine(parent, content, size, color);
+            text.rectTransform.sizeDelta = new Vector2(0f, (size + 6f) * 2f + 4f);
+            return text;
         }
 
         private void AddConditionLines(RectTransform pane, Requirements.RequirementSet set)
@@ -581,6 +745,7 @@ namespace AnimalFarm.UI
             _resSpiritFillRt = null;
             _resSpiritFill = null;
             _resHungerText = null;
+            _resGroundText = null;
             _resFameText = null;
             _resCheckHomeText = null;
             _resCheckSpiritText = null;
@@ -624,10 +789,32 @@ namespace AnimalFarm.UI
 
             _resHungerText = AddLine(_residentDetailPane, "", 22, Cream);
 
+            // Muscle 02: what this species loves / hates, and how its ground feels right now.
+            AddTwoLine(_residentDetailPane, "Biomes: " + BiomeAffinity.Describe(species), 20, Muted);
+            _resGroundText = AddLine(_residentDetailPane, "", 22, Cream);
+
             AddLine(_residentDetailPane, "Nature", 24, Gold);
-            AddNatureRow(_residentDetailPane, "Vigor", agent.Vigor);
-            AddNatureRow(_residentDetailPane, "Grace", agent.Grace);
-            AddNatureRow(_residentDetailPane, "Gleam", agent.Gleam);
+            AddNatureRow(_residentDetailPane, agent, SpiritStat.Vigor);
+            AddNatureRow(_residentDetailPane, agent, SpiritStat.Grace);
+            AddNatureRow(_residentDetailPane, agent, SpiritStat.Gleam);
+
+            // Traits (muscle 05): names + one flavor line each.
+            if (agent.Traits.Count > 0)
+            {
+                AddLine(_residentDetailPane, "Traits: " + SpiritTraits.Describe(agent.Traits), 22, Gold);
+                var traitLines = AddLine(_residentDetailPane, SpiritTraits.FlavorLines(agent.Traits), 20, Muted);
+                traitLines.verticalOverflow = VerticalWrapMode.Truncate;
+                traitLines.rectTransform.sizeDelta = new Vector2(0f, 26f * agent.Traits.Count * 2f); // ~2 lines each
+            }
+
+            // Muscle 06: a woven cryptid's page records the parents it was woven from.
+            if (species != null && SpiritManager.Instance != null
+                && SpiritManager.Instance.IsWovenSpecies(species.id) && WeaveArchive.Instance != null)
+            {
+                var weave = WeaveArchive.Instance.RecordFor(agent);
+                if (weave != null)
+                    AddTwoLine(_residentDetailPane, "Woven from " + WovenFromText(weave), 20, Muted);
+            }
 
             // Competitions line (hidden until the first entry).
             if (agent.CompetitionEntries > 0)
@@ -686,6 +873,12 @@ namespace AnimalFarm.UI
             if (_resHungerText != null)
                 _resHungerText.text = "Hunger: " + HungerWord(agent.Hunger01);
 
+            if (_resGroundText != null)
+                _resGroundText.text = agent.GroundBase < 0
+                    ? "Ground: beyond the fences"
+                    : "Ground: " + BiomeAffinity.BiomeName(agent.GroundBiome)
+                        + " - " + BiomeAffinity.GroundFeeling(agent.GroundAffinity);
+
             if (_resFameText != null)
                 _resFameText.text = "Competitions: " + agent.CompetitionWins + " wins / "
                     + agent.CompetitionEntries + " entries";
@@ -698,33 +891,36 @@ namespace AnimalFarm.UI
                 _resCheckWishText.text = Check(agent.TaskDone) + " Final wish";
         }
 
-        /// <summary>Nature stat row: "Vigor 7/9" label + fixed-width mini bar.</summary>
-        private static void AddNatureRow(RectTransform parent, string label, int value)
+        /// <summary>Nature stat row: "Vigor 4 (3-7)" (roll + species band) + fixed-width mini bar.</summary>
+        private static void AddNatureRow(RectTransform parent, SpiritAgent agent, SpiritStat stat)
         {
+            string label = SpiritStats.Label(stat);
+            int value = agent.GetStat(stat);
             var row = new GameObject("Stat_" + label).AddComponent<RectTransform>();
             row.SetParent(parent, false);
             row.sizeDelta = new Vector2(0f, 24f);
 
             var text = UIRoot.MakeText(row, "Label", 22, TextAnchor.MiddleLeft, Cream);
-            text.text = label + " " + value + "/9";
+            text.text = SpiritStats.BandText(agent.Species, stat, value);
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
             var textRt = text.rectTransform;
             textRt.anchorMin = new Vector2(0f, 0f);
             textRt.anchorMax = new Vector2(0f, 1f);
             textRt.pivot = new Vector2(0f, 0.5f);
-            textRt.sizeDelta = new Vector2(150f, 0f);
+            textRt.sizeDelta = new Vector2(170f, 0f);
             textRt.anchoredPosition = Vector2.zero;
 
-            const float barMax = 190f;
+            const float barMax = 170f;
 
             // Rounded mini-bar (fixed width, right of the label).
-            float frac = Mathf.Clamp01(value / 9f);
+            float frac = Mathf.Clamp01(value / (float)SpiritStats.Ceiling);
             var fill = UIStyle.MakeBar(row, "Bar", out var fillRt, StatBlue);
             var backRt = (RectTransform)fill.transform.parent;
             backRt.anchorMin = new Vector2(0f, 0.15f);
             backRt.anchorMax = new Vector2(0f, 0.85f);
             backRt.pivot = new Vector2(0f, 0.5f);
             backRt.sizeDelta = new Vector2(barMax, 0f);
-            backRt.anchoredPosition = new Vector2(160f, 0f);
+            backRt.anchoredPosition = new Vector2(180f, 0f);
             backRt.GetComponent<Image>().raycastTarget = false;
 
             // Fill width: inset 3px each side of the filled fraction.
@@ -758,31 +954,152 @@ namespace AnimalFarm.UI
 
         private static string Check(bool done) => done ? "[x]" : "[ ]";
 
+        private const int LegacyPerPage = 9;
+
+        /// <summary>
+        /// Legacy Gallery (muscle 04). Left: the crossed, one row each (paged).
+        /// Right: the selected spirit's page - name, species, days on the farm,
+        /// how it crossed, its final wish, and whether its stone rests in the
+        /// garden or still waits. The "Woven away" section (muscle 06) sits
+        /// under the page and stays visible whatever is selected.
+        /// </summary>
         private void RebuildLegacyTab()
         {
-            ClearChildren(_legacyPane);
+            ClearChildren(_legacyListColumn);
+            ClearChildren(_legacyDetailPane);
 
             var registry = HeadstoneRegistry.Instance;
-            var stones = registry != null ? registry.All : null;
-            int listed = 0;
-
-            if (stones != null)
+            var stones = new System.Collections.Generic.List<Headstone>();
+            if (registry != null)
             {
-                for (int i = 0; i < stones.Count; i++)
-                {
-                    var stone = stones[i];
-                    if (stone == null) continue;
+                var all = registry.All;
+                for (int i = 0; i < all.Count; i++)
+                    if (all[i] != null) stones.Add(all[i]);
+            }
+            int listed = stones.Count;
 
-                    AddLine(_legacyPane,
-                        stone.SpiritName + " the " + stone.SpeciesDisplay
-                            + " - ascended Day " + stone.AscendedDay,
-                        22, Cream);
-                    listed++;
+            // Selection: keep it if still valid, else the most recent crossing.
+            int selIndex = _selectedStone != null ? stones.IndexOf(_selectedStone) : -1;
+            if (selIndex < 0 && listed > 0)
+            {
+                selIndex = listed - 1;
+                _selectedStone = stones[selIndex];
+                _legacyPage = selIndex / LegacyPerPage;
+            }
+            if (listed == 0) _selectedStone = null;
+
+            int pages = Mathf.Max(1, (listed + LegacyPerPage - 1) / LegacyPerPage);
+            _legacyPage = Mathf.Clamp(_legacyPage, 0, pages - 1);
+
+            if (listed > 0)
+            {
+                int waiting = 0;
+                for (int i = 0; i < listed; i++)
+                    if (!stones[i].Placed) waiting++;
+
+                AddLine(_legacyListColumn, "The memorial garden", 26, Gold);
+                AddLine(_legacyListColumn,
+                    listed + (listed == 1 ? " name remembered" : " names remembered")
+                        + (waiting > 0 ? " (" + waiting + " stone" + (waiting == 1 ? "" : "s") + " waiting)" : ""),
+                    20, Muted);
+
+                int first = _legacyPage * LegacyPerPage;
+                int last = Mathf.Min(listed, first + LegacyPerPage);
+                for (int i = first; i < last; i++)
+                {
+                    var picked = stones[i]; // capture for the click closure
+                    MakeAgentRowButton(_legacyListColumn,
+                        picked.SpiritName + " the " + picked.SpeciesDisplay
+                            + " - Day " + picked.AscendedDay,
+                        picked.Placed ? Cream : Gold, picked == _selectedStone,
+                        () => { _selectedStone = picked; RebuildLegacyTab(); });
+                }
+
+                if (pages > 1)
+                {
+                    AddLine(_legacyListColumn, "Page " + (_legacyPage + 1) + " of " + pages, 20, Muted);
+                    if (_legacyPage > 0)
+                        MakeRowButton(_legacyListColumn, "< Earlier", false,
+                            () => { _legacyPage--; RebuildLegacyTab(); });
+                    if (_legacyPage < pages - 1)
+                        MakeRowButton(_legacyListColumn, "Later >", false,
+                            () => { _legacyPage++; RebuildLegacyTab(); });
                 }
             }
 
-            if (listed == 0)
-                AddLine(_legacyPane, "(no one has moved on yet)", 22, Muted);
+            if (_selectedStone != null)
+                AddStonePage(_legacyDetailPane, _selectedStone);
+
+            // Muscle 06: the woven-away are remembered here too (garden stones are
+            // for the crossed; the woven live on as a cryptid and a banner).
+            var archive = WeaveArchive.Instance;
+            var weaves = archive != null ? archive.Weaves : null;
+            int woven = 0;
+            if (weaves != null && weaves.Count > 0)
+            {
+                if (_selectedStone != null) AddLine(_legacyDetailPane, "", 14, Muted);
+                AddLine(_legacyDetailPane, "Woven away", 24, Gold);
+                for (int i = 0; i < weaves.Count; i++)
+                {
+                    var w = weaves[i];
+                    string child = !string.IsNullOrEmpty(w.childName) ? w.childName : w.childSpeciesName;
+                    AddLine(_legacyDetailPane,
+                        w.parentAName + " the " + w.parentASpeciesName + " and "
+                            + w.parentBName + " the " + w.parentBSpeciesName
+                            + " - woven into " + child + ", Day " + w.day,
+                        20, Cream);
+                    woven++;
+                }
+            }
+
+            if (listed == 0 && woven == 0)
+                AddLine(_legacyListColumn, "(no one has moved on yet)", 22, Muted);
+        }
+
+        /// <summary>One crossed spirit's gallery page (owner rule: the page only
+        /// says that they crossed - nothing more about the crossing itself).</summary>
+        private static void AddStonePage(RectTransform pane, Headstone stone)
+        {
+            AddLine(pane, stone.SpiritName, 32, Gold);
+            AddLine(pane, "the " + stone.SpeciesDisplay, 24, Cream);
+            AddLine(pane, "Days on the farm: " + stone.DaysAmongUs.ToString("0.#"), 22, Cream);
+            AddLine(pane, "Fed " + stone.TimesFed + " times.", 22, Cream);
+            AddTwoLine(pane, CrossedText(stone), 22, Cream);
+
+            var mgr = SpiritManager.Instance;
+            var species = mgr != null ? mgr.FindSpecies(stone.SpeciesId) : null;
+            if (species != null && !string.IsNullOrEmpty(species.taskDescription))
+                AddTwoLine(pane, "Their last wish, granted: " + species.taskDescription, 20, Muted);
+
+            if (stone.Placed)
+            {
+                string ground = MemorialGarden.Describe(stone);
+                AddTwoLine(pane, "Their stone rests in the garden"
+                    + (ground.Length > 0 ? " - " + ground : "") + ".", 20, Muted);
+            }
+            else
+            {
+                AddTwoLine(pane,
+                    "Their stone has not been placed yet. It waits where it was left - "
+                        + "select it and choose Move stone to give it a resting place.",
+                    20, Gold);
+            }
+        }
+
+        private static string CrossedText(Headstone stone)
+        {
+            string s = "Crossed over on Day " + stone.AscendedDay;
+            float h = stone.CrossedHour;
+            if (h >= 0f)
+            {
+                s += h >= 5f && h < 8f ? ", at dawn"
+                    : h >= 8f && h < 17f ? ", in the daylight"
+                    : h >= 17f && h < 20f ? ", at dusk"
+                    : ", in the night";
+            }
+            if (stone.Witnesses > 0)
+                s += ", with " + stone.Witnesses + (stone.Witnesses == 1 ? " neighbour" : " neighbours") + " watching";
+            return s + ".";
         }
 
         // --------------------------------------------------------- List pieces

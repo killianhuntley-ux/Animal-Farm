@@ -21,6 +21,8 @@ namespace AnimalFarm.Spirits
     {
         private const int SampleRate = 44100;
         private const int SourceCount = 2;
+        private const float MaxHz = 2500f; // synthesized voices never go above this
+        private const float MinHz = 60f;
 
         private static readonly Dictionary<string, AudioClip> _clips =
             new Dictionary<string, AudioClip>();
@@ -33,13 +35,20 @@ namespace AnimalFarm.Spirits
         public static void Play(SpiritSpeciesDefinition species, VoiceIntent intent, float volume = 1f)
         {
             if (Bleeps.Muted || volume <= 0f || !Application.isPlaying) return;
+            if (AudioGuard.VoiceVolume <= 0f) return; // voice bus turned all the way down
+
+            // Central gate: key = species id + intent. The Voice bus also has a
+            // global cap (one call every 0.12 s, 6 a second) so a crowd of
+            // spirits startling or greeting together cannot stack into a shriek.
+            string id = species != null && !string.IsNullOrEmpty(species.id) ? species.id : "_default";
+            if (!AudioGuard.TryPlay(AudioBus.Voice, "voice:" + id + ":" + intent, volume, 0.25f)) return;
 
             var clip = GetClip(species, intent);
             if (clip == null) return;
 
             var source = NextSource();
             if (source != null)
-                source.PlayOneShot(clip, Mathf.Clamp01(volume));
+                source.PlayOneShot(clip, Mathf.Clamp01(volume) * AudioGuard.VoiceVolume);
         }
 
         // ---------------------------------------------------------------- Host
@@ -163,7 +172,7 @@ namespace AnimalFarm.Spirits
                 int idx = start + i;
                 if (idx >= d.Length) break;
                 float t = i / (float)SampleRate;
-                float f = Mathf.Lerp(fStart, fEnd, t / dur);
+                float f = Mathf.Clamp(Mathf.Lerp(fStart, fEnd, t / dur), MinHz, MaxHz); // never shrill
                 phase += 2f * Mathf.PI * f / SampleRate; // integrate frequency
                 float env = Mathf.Clamp01(t / Mathf.Max(0.001f, attack)) * Decay(t, dur);
                 d[idx] += amp * Mathf.Sin(phase) * env;

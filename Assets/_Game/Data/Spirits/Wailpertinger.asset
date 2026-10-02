@@ -28,9 +28,44 @@ MonoBehaviour:
   stretchWeight: 0.9
   hopWeight: 1.4
   leafChaseWeight: 1
+  vigorBand: {x: 5, y: 9}
+  graceBand: {x: 5, y: 9}
+  gleamBand: {x: 4, y: 8}
+  allowedTraitIds: []
   voiceBasePitch: 420
   voiceContour: -0.6
   voiceChirpSeconds: 0.14
+  animProfile:
+    happy:
+      bobStyle: 2
+      bobFreqMul: 1.2
+      bobAmpMul: 1.1
+      speedMul: 1.1
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1.05}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 1
+    neutral:
+      bobStyle: 0
+      bobFreqMul: 0.8
+      bobAmpMul: 1
+      speedMul: 1
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 1
+    sadSick:
+      bobStyle: 0
+      bobFreqMul: 0.4
+      bobAmpMul: 0.5
+      speedMul: 0.6
+      bodyYOffset: -0.1
+      bodyScale: {x: 1.06, y: 0.88}
+      tiltDegrees: -10
+      swayDegrees: 0
+      saturation: 0.55
   hungerHours: 16
   spiritDecayPerHungryHour: 8
   feedSpiritBoost: 15
@@ -45,3 +80,10 @@ MonoBehaviour:
   taskWindowEndHour: 1
   taskDescription: A hoard of berries befitting a proper legend.
   taskHint: (legends demand two more berries)
+  biomeAffinities:
+  - biome: 1
+    affinity: 2
+  - biome: 2
+    affinity: 4
+  - biome: 3
+    affinity: 1

@@ -4,6 +4,31 @@
 **Problem:** spirits are wandering stat-bags — no personality in motion, wants legible only in the journal, no reaction to the shepherd.
 All verdicts are owner decisions, 2026-09-30 (question-round format).
 
+## Build status (2026-10-01, wave 2)
+
+Compiled clean, awaiting owner playtest.
+
+**BUILT (by build-list item)**
+1. SpiritAnimState - per-species happy / neutral / sad-sick poses (bob style, pace, droop, saturation); a starving resident reads as sick.
+2. WantBubble - event-driven bubbles (food / water / lonely / home / wrong-ground).
+3. Presence reactions - mood drift toward/away, first-meet-of-day greeting, sprint flinch (never lowers mood).
+4. IdleBehaviorLibrary - micro-moments, habitat habits, night shift.
+5. PairInteraction - play or squabble, consistent per pair.
+6. SpiritVoice - per-species synth voices on the Voice bus (guarded by AudioGuard).
+7. Naming ceremony "Light descends" - built, skippable, queued.
+8. Silhouette shyness - drifts back and fades, reappears on the border later.
+
+**NOT BUILT**
+- Owner mic-gibberish voices (skin phase, as planned).
+- Nothing else from this build list is outstanding.
+
+**ASSUMPTIONs made in build**
+- Mood bands: happy at Spirit >= 70, sad-sick under 35.
+- Naming ceremony: world eases to 30% speed, light descends over ~2 s, bow ~1.2 s, three echo texts; Esc skips the flourish (the name always lands, echo and journal flip are dropped); concurrent requests queue.
+- Shyness: triggers inside 3.2 units, retreats ~1.6 s, stays hidden 20-45 scaled seconds, reappears on the border at least 8 units from you with a 6 s cooldown.
+- Sprint startle: within 1.5 units while moving faster than 5.6, at most once per 4 s.
+- Happy bob styles per species (Mausoleum bounce, Bansheep sway, Phantomoth flutter, Wailpertinger waddle); neutral stays plain float.
+
 ---
 
 ## Verdicts (locked)

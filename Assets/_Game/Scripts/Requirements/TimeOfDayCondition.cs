@@ -30,6 +30,8 @@ namespace AnimalFarm.Requirements
                 : hours >= start || hours < end; // wraps past midnight
         }
 
+        public override ConditionTopic Topic => ConditionTopic.Time;
+
         public override string Describe()
         {
             var clock = GameClock.Instance;

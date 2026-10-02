@@ -436,6 +436,13 @@ namespace AnimalFarm.Player
             switch (tool.kind)
             {
                 case ToolKind.Till:
+                    // Muscle 07: a villain's burrow hole is re-flattened with the
+                    // hoe first (the ground under it is left as it was).
+                    if (VillainHole.TryFlattenAt(cell))
+                    {
+                        ShepherdProgress.Grant("till");
+                        return true;
+                    }
                     grid.SetSurface(cell, Surface.Dirt);
                     Puffs.Burst(center, DirtPuff);
                     ShepherdProgress.Grant("till");
@@ -503,7 +510,7 @@ namespace AnimalFarm.Player
 
             var grid = TerrainGrid.Instance;
             ToolKind kind = _tools.Count > 0 ? _tools[_toolIndex].kind : ToolKind.None;
-            if (!_hasTarget || grid == null || kind == ToolKind.None)
+            if (!_hasTarget || grid == null || kind == ToolKind.None || ShepherdRest.IsSeated || PoutyMount.IsRiding)
             {
                 reticle.enabled = false;
                 return;
@@ -533,6 +540,8 @@ namespace AnimalFarm.Player
         {
             // A committed swing cannot be interrupted or double-started.
             if (_acting) return;
+            if (ShepherdRest.IsSeated) return; // hands in lap while resting
+            if (PoutyMount.IsRiding) return; // hands on the reins while riding
 
             // A selection click (or move-mode placement) must not also swing the tool.
             if (SelectionController.ConsumedClickFrame == Time.frameCount) return;
@@ -549,6 +558,7 @@ namespace AnimalFarm.Player
         private void UpdateHeldBrush()
         {
             if (_acting) return; // one committed action at a time
+            if (ShepherdRest.IsSeated || PoutyMount.IsRiding) return;
 
             var input = GameInput.Instance;
             if (input == null || !input.UseToolHeld || !_hasTarget) return;
@@ -630,6 +640,7 @@ namespace AnimalFarm.Player
 
             var comp = AnimalFarm.Competitions.CompetitionManager.Instance;
             if (comp != null && comp.EventRunning) return;
+            if (PoutyMount.IsRiding || ShepherdRest.IsSeated) return; // not from the saddle or while resting
             AnimalFarm.UI.HomePickerUI.Instance?.Open();
         }
 
@@ -666,7 +677,9 @@ namespace AnimalFarm.Player
                 case ToolKind.Till:
                     // Hoe: applies on Scrub/Grass/Water; blocked over plants
                     // and homes — ground-change kills only when deliberate.
-                    return surface != Surface.Dirt && !hasPlant && !Home.AnyAtCell(cell);
+                    // A villain hole on the cell always counts (re-flatten it).
+                    return VillainHole.AnyAt(cell)
+                        || (surface != Surface.Dirt && !hasPlant && !Home.AnyAtCell(cell));
 
                 case ToolKind.SowGrass:
                     return surface == Surface.Dirt && !hasPlant;
@@ -683,7 +696,7 @@ namespace AnimalFarm.Player
                 case ToolKind.Seed:
                     return tool.species != null
                         && PlantManager.Instance != null
-                        && surface == tool.species.requiredSurface
+                        && tool.species.GrowsOn(surface)
                         && !hasPlant;
 
                 case ToolKind.Home:

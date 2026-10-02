@@ -39,7 +39,13 @@ namespace AnimalFarm.Core
             Time.timeScale = paused ? 0f : 1f;
 
             if (GameInput.Instance != null)
-                GameInput.Instance.SetGameplayBlocked(paused);
+            {
+                // Resuming must not unblock input while another modal or a ceremony
+                // still owns it (journal open under the pause menu, naming/Styx running).
+                bool otherOwner = UIInputLock.AnyOwnerHolds;
+                if (paused || !otherOwner)
+                    GameInput.Instance.SetGameplayBlocked(paused);
+            }
 
             OnPauseChanged?.Invoke(paused);
         }

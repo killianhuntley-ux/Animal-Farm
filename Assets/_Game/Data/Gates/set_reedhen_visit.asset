@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ded63c081d17e14a94b817050e3c734, type: 3}
+  m_Name: set_reedhen_visit
+  m_EditorClassIdentifier: 
+  conditions:
+  - {fileID: 11400000, guid: e590ce7581f5fb9428642b61e6446481, type: 2}
+  - {fileID: 11400000, guid: 029bf4a9ad7ad2d4198bf9fbae545693, type: 2}
+  - {fileID: 11400000, guid: fb2249eed3c8f84418631efdc852d237, type: 2}

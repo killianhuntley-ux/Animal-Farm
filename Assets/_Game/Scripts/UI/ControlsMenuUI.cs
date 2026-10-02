@@ -56,6 +56,8 @@ namespace AnimalFarm.UI
             new Target("Cycle Tool", "CycleTool"),
             new Target("Toolbelt", "Toolbelt"),
             new Target("Build", "Build"),
+            new Target("Sit / Rest", "Rest"),
+            new Target("Ride / Dismount", "Ride"),
             new Target("Pause", "Pause"),
         };
 
@@ -182,7 +184,7 @@ namespace AnimalFarm.UI
             panel.SetParent(overlayRt, false);
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(560f, 860f);
+            panel.sizeDelta = new Vector2(560f, 980f);
 
             var panelImg = panel.gameObject.AddComponent<Image>();
             UIStyle.ApplyPanel(panelImg, UIStyle.PanelBg);

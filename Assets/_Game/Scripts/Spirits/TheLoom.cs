@@ -134,105 +134,22 @@ namespace AnimalFarm.Spirits
 
         // ---- ceremony -----------------------------------------------------------
 
-        /// <summary>Runs the weaving ceremony. The WeaveUI validated the pair.</summary>
+        /// <summary>
+        /// Runs the night loom rite (muscle 06: WeaveRiteCeremony). The WeaveUI
+        /// validated the pair; the rite re-validates and refuses if a ceremony
+        /// is already playing.
+        /// </summary>
         public void RunWeave(SpiritAgent a, SpiritAgent b)
         {
             if (_weaving || a == null || b == null || a == b) return;
-            StartCoroutine(WeaveRoutine(a, b));
+            _weaving = true; // set first: the rite calls EndRite() when it finishes
+            if (!WeaveRiteCeremony.Begin(this, a, b)) _weaving = false;
         }
 
-        private IEnumerator WeaveRoutine(SpiritAgent a, SpiritAgent b)
-        {
-            _weaving = true;
+        /// <summary>Rite callback: the loom is free again.</summary>
+        public void EndRite() => _weaving = false;
 
-            Vector3 center = transform.position;
-            Vector3 pointA = center + Vector3.left * ApproachOffset;
-            Vector3 pointB = center + Vector3.right * ApproachOffset;
-
-            a.SetFollowing(false);
-            b.SetFollowing(false);
-            a.EnterCeremony(pointA);
-            b.EnterCeremony(pointB);
-
-            // Wait for both to drift to their side of the loom (or give up).
-            float deadline = Time.time + ArriveTimeout;
-            while (Time.time < deadline && a != null && b != null
-                   && ((a.transform.position - pointA).sqrMagnitude > ArriveRadius * ArriveRadius
-                       || (b.transform.position - pointB).sqrMagnitude > ArriveRadius * ArriveRadius))
-                yield return null;
-
-            if (a == null || b == null)
-            {
-                // One of them despawned mid-approach; let the other go.
-                if (a != null) a.ExitCeremony();
-                if (b != null) b.ExitCeremony();
-                _weaving = false;
-                yield break;
-            }
-
-            // Swirl: both orbit the loom on opposite sides, spiraling inward and
-            // fading. Positions are set manually; the ceremony drift now aims at
-            // the loom center, so it only pulls the same way.
-            a.EnterCeremony(center);
-            b.EnterCeremony(center);
-            float startAngle = Mathf.Atan2(
-                a.transform.position.y - center.y, a.transform.position.x - center.x);
-            for (float t = 0f; t < SwirlSeconds; t += Time.deltaTime)
-            {
-                if (a == null || b == null) break;
-                float k = Mathf.Clamp01(t / SwirlSeconds);
-                float radius = Mathf.Lerp(SwirlStartRadius, SwirlEndRadius, k);
-                float angle = startAngle + t * SwirlTurnsPerSecond * 2f * Mathf.PI;
-
-                a.transform.position = center
-                    + new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * radius;
-                b.transform.position = center
-                    + new Vector3(Mathf.Cos(angle + Mathf.PI), Mathf.Sin(angle + Mathf.PI), 0f) * radius;
-
-                float alpha = Mathf.Lerp(1f, SwirlMinAlpha, k);
-                SetAgentAlpha(a, alpha);
-                SetAgentAlpha(b, alpha);
-                yield return null;
-            }
-
-            FloatingText.Show(center + Vector3.up * 1.5f, "The threads pull tight...", UIStyle.Grey);
-
-            SpiritAgent woven = null;
-            if (SpiritManager.Instance != null && a != null && b != null)
-                woven = SpiritManager.Instance.Weave(a, b, center + Vector3.down * ResultDropOffset);
-
-            if (woven == null)
-            {
-                // Shouldn't happen -- the UI validated the pair. Let them go;
-                // their own TickVisuals restores color next frame.
-                if (a != null) { a.ExitCeremony(); SetAgentAlpha(a, 1f); }
-                if (b != null) { b.ExitCeremony(); SetAgentAlpha(b, 1f); }
-                FloatingText.Show(center + Vector3.up * 1.1f, "(the loom is silent)", UIStyle.Grey);
-            }
-            else
-            {
-                // The parents were consumed by Weave; greet the newcomer with a
-                // brief scale-pop down onto its 1.6 base scale.
-                FloatingText.Show(woven.transform.position + Vector3.up * 1.2f,
-                    woven.GivenName + "!", UIStyle.Gold);
-                for (float t = 0f; t < PopSeconds; t += Time.deltaTime)
-                {
-                    if (woven == null) break;
-                    float k = Mathf.Clamp01(t / PopSeconds);
-                    woven.transform.localScale = Vector3.one * Mathf.Lerp(PopStartScale, PopEndScale, k);
-                    yield return null;
-                }
-                if (woven != null) woven.transform.localScale = Vector3.one * PopEndScale;
-            }
-
-            _weaving = false;
-        }
-
-        private static void SetAgentAlpha(SpiritAgent agent, float alpha)
-        {
-            if (agent == null || agent.Renderer == null) return;
-            var c = agent.Renderer.color;
-            agent.Renderer.color = new Color(c.r, c.g, c.b, alpha);
-        }
+        /// <summary>The loom's body sprite (the rite hoists it above the darkness).</summary>
+        public SpriteRenderer BodyRenderer => _renderer;
     }
 }

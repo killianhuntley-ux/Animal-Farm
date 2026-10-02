@@ -63,6 +63,10 @@ namespace AnimalFarm.World
 
         public bool HasPlantAt(Vector2Int cell) => _byCell.ContainsKey(cell);
 
+        /// <summary>The plant on a cell, or null.</summary>
+        public Plant GetPlantAt(Vector2Int cell) =>
+            _byCell.TryGetValue(cell, out var p) ? p : null;
+
         public int CountPlants(string speciesId, int minStage)
         {
             int count = 0;
@@ -82,14 +86,22 @@ namespace AnimalFarm.World
         {
             if (s == null || HasPlantAt(cell)) return null;
             if (VillainHoles.BlocksCell(cell)) return null;
-            if (TerrainGrid.Instance == null || TerrainGrid.Instance.GetSurface(cell) != s.requiredSurface)
+            if (TerrainGrid.Instance == null || !s.GrowsOn(TerrainGrid.Instance.GetSurface(cell)))
                 return null;
+            if (s.shallowOnly && !TerrainGrid.Instance.IsShallowRim(cell)) return null; // water species: rim only
 
             float now = GameClock.Instance != null ? GameClock.Instance.TotalHours : 0f;
-            return Spawn(s, cell, now, 0f);
+            var plant = Spawn(s, cell, now, 0f);
+
+            // Soil enriched with compost before sowing carries into this crop.
+            if (plant != null && plant.HasQuality && CompostManager.Instance != null
+                && CompostManager.Instance.TakeEnrichment(cell))
+                plant.ApplyCompost();
+            return plant;
         }
 
-        private Plant Spawn(PlantSpecies s, Vector2Int cell, float plantedAtTotalHours, float growthHours)
+        private Plant Spawn(PlantSpecies s, Vector2Int cell, float plantedAtTotalHours, float growthHours,
+            float elapsedHours = 0f, float wateredHours = 0f, bool composted = false)
         {
             var go = new GameObject("Plant_" + s.id);
 
@@ -102,7 +114,7 @@ namespace AnimalFarm.World
             collider.radius = 0.4f;
 
             var plant = go.AddComponent<Plant>();
-            plant.Init(s, cell, plantedAtTotalHours, growthHours);
+            plant.Init(s, cell, plantedAtTotalHours, growthHours, elapsedHours, wateredHours, composted);
 
             _plants.Add(plant);
             _byCell[cell] = plant;
@@ -125,7 +137,7 @@ namespace AnimalFarm.World
         private void HandleSurfaceChanged(Vector2Int cell, Surface surface)
         {
             if (!_byCell.TryGetValue(cell, out var plant) || plant == null) return;
-            if (plant.Species != null && plant.Species.requiredSurface == surface) return;
+            if (plant.Species != null && plant.Species.GrowsOn(surface)) return;
 
             string label = plant.Species != null ? plant.Species.displayName : "Plant";
             RemovePlant(plant);
@@ -141,6 +153,9 @@ namespace AnimalFarm.World
             public int cx, cy;
             public float plantedAt;
             public float growthHours; // accumulated effective growth (0 in old saves)
+            public float elapsedHours; // quality cycle: game-hours since cycle start (0 in old saves)
+            public float wateredHours; // quality cycle: of which the soil was wet
+            public bool composted;
         }
 
         [Serializable]
@@ -164,7 +179,10 @@ namespace AnimalFarm.World
                     cx = p.Cell.x,
                     cy = p.Cell.y,
                     plantedAt = p.PlantedAtTotalHours,
-                    growthHours = p.GrowthHours
+                    growthHours = p.GrowthHours,
+                    elapsedHours = p.ElapsedHours,
+                    wateredHours = p.WateredHours,
+                    composted = p.Composted
                 });
             }
             return JsonUtility.ToJson(state);
@@ -207,7 +225,13 @@ namespace AnimalFarm.World
                 if (growthHours == 0f && record.plantedAt < now)
                     growthHours = now - record.plantedAt;
 
-                Spawn(species, cell, record.plantedAt, growthHours);
+                // Records from before crop quality carry no quality cycle: seed a
+                // half-watered one (lands on Normal) so nothing reads as perfect for free.
+                float elapsed = record.elapsedHours;
+                float wetHours = record.wateredHours;
+                if (elapsed <= 0f && growthHours > 0f) { elapsed = growthHours; wetHours = growthHours * 0.5f; }
+
+                Spawn(species, cell, record.plantedAt, growthHours, elapsed, wetHours, record.composted);
             }
         }
     }

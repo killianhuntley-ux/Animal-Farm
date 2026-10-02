@@ -43,7 +43,7 @@ namespace AnimalFarm.Core
         /// Cheap and capped -- bursts beyond the live cap are silently dropped.
         /// </summary>
         public static void Burst(Vector3 worldPos, Color color, int count = 6,
-            float speed = 1.4f, float life = 0.35f, float size = 0.1f)
+            float speed = 1.4f, float life = 0.35f, float size = 0.1f, int sortingOrder = 240)
         {
             if (!Application.isPlaying || _liveBursts >= MaxLiveBursts) return;
             _liveBursts++;
@@ -51,7 +51,7 @@ namespace AnimalFarm.Core
             var go = new GameObject("Puff");
             go.transform.position = worldPos;
             var runner = go.AddComponent<Runner>();
-            runner.Init(color, Mathf.Clamp(count, 1, 16), speed, life, size);
+            runner.Init(color, Mathf.Clamp(count, 1, 16), speed, life, size, sortingOrder);
         }
 
         /// <summary>Owns one burst: moves, shrinks and fades its quads, then dies.</summary>
@@ -65,7 +65,7 @@ namespace AnimalFarm.Core
             private float _size;
             private float _elapsed;
 
-            public void Init(Color color, int count, float speed, float life, float size)
+            public void Init(Color color, int count, float speed, float life, float size, int sortingOrder)
             {
                 _color = color;
                 _life = Mathf.Max(life, 0.05f);
@@ -83,7 +83,7 @@ namespace AnimalFarm.Core
                     var sr = part.AddComponent<SpriteRenderer>();
                     sr.sprite = Square;
                     sr.color = color;
-                    sr.sortingOrder = 240; // above terrain/plants, below floating text (500)
+                    sr.sortingOrder = sortingOrder; // default 240: above terrain/plants, below floating text (500)
 
                     Vector2 dir = Random.insideUnitCircle.normalized;
                     // Slight upward bias so puffs read as kicked-up dust.

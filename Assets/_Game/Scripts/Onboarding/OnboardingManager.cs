@@ -105,10 +105,10 @@ namespace AnimalFarm.Onboarding
                 "Something stirs at the fence. Watch. Screaming reads as rude here.",
                 "It is shy. You are new. Wait with me.",
                 "It sees you. Congratulations, mostly."),
-            new Step("feed",
-                "Offer it food. The dead remember meals longer than faces.",
-                "Hold the food out. Appetite outlives everything.",
-                "It trusts you. Good instinct, that one."),
+            new Step("stay",
+                "Keep the crops coming. It will decide to stay on its own. The dead resent being pushed.",
+                "Ripe wheat, a green lawn, patience. Staying is its idea, not yours.",
+                "It chose you. Nobody pushed. Very respectable."),
             new Step("name",
                 "Give them a name. The unnamed drift, and drift means paperwork.",
                 "Any name will do. They will grow into it.",
@@ -118,7 +118,7 @@ namespace AnimalFarm.Onboarding
                 "Press B. Walls, roof, done. They are not picky.",
                 "A roof for the dead. Well done, shepherd."),
             new Step("done",
-                "My shift ends soon. J journal, T tools, B build; town lies east. The rest is yours.",
+                "My shift ends soon. J journal, T tools, B build, Z sit; town lies east. The rest is yours.",
                 "",
                 "")
         };
@@ -160,6 +160,9 @@ namespace AnimalFarm.Onboarding
         // ---- public surface ------------------------------------------------------
 
         public bool IsComplete => _complete;
+
+        /// <summary>The guide-light (always spawned, hidden once onboarding completes). Ceremonies borrow it.</summary>
+        public GuideLight Guide => _guide;
 
         /// <summary>Current objective text ("complete" once done); console-friendly.</summary>
         public string CurrentObjective
@@ -466,7 +469,7 @@ namespace AnimalFarm.Onboarding
                 case 4: // Something stirs (any live spirit: Silhouette or better)
                     return FindSpirit(SpiritState.Silhouette, orBetter: true) != null;
 
-                case 5: // Win its trust (any discovery at Resident, or the naming modal fired)
+                case 5: // It decides to stay (any discovery at Resident, or the naming modal fired)
                     return _namingRequested || AnyDiscoveryAtResident();
 
                 case 6: // Give them a name
@@ -585,7 +588,7 @@ namespace AnimalFarm.Onboarding
                     break;
                 }
 
-                case 5: // point at the silhouette/visitor being courted
+                case 5: // point at the silhouette/visitor deciding whether to stay
                 {
                     var target = FindSpirit(SpiritState.Visitor, orBetter: false);
                     if (target == null) target = FindSpirit(SpiritState.Silhouette, orBetter: false);

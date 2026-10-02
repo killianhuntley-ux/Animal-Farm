@@ -18,8 +18,10 @@ namespace AnimalFarm.Spirits
 
     /// <summary>
     /// One spirit species as pure data (slice 03). Garden-state gates (Appear /
-    /// Visit) come from the species' GateChain; converting a visitor into a
-    /// resident is per-individual — feed it favoredFood residencyFoodCount times.
+    /// Visit / Stay) come from the species' GateChain. A visitor becomes a
+    /// resident on its OWN: while the Stay gate (GateChain.resident) is met it
+    /// periodically rolls to decide to stay (muscle 11, owner verdict
+    /// 2026-10-01: no feeding quota, no trust meter).
     /// </summary>
     [CreateAssetMenu(menuName = "AnimalFarm/Spirit Species")]
     public class SpiritSpeciesDefinition : ScriptableObject
@@ -33,11 +35,12 @@ namespace AnimalFarm.Spirits
         public Sprite bodySprite;
         public Color tint = Color.white;
 
-        [Header("Gates (Appear/Visit drive spawning; Resident mirrors Visit)")]
+        [Header("Gates (Appear = silhouette, Visit = visitor, Resident = STAY gate: met = it may decide to join)")]
         public GateChain gateChain;
 
-        [Header("Residency (per-individual conversion)")]
+        [Header("Residency (visitors decide on their own; favoured food is only a gift)")]
         public string favoredFoodId = "wheat";
+        [HideInInspector, Tooltip("DEPRECATED (muscle 11): feeding no longer converts a visitor. Kept so old assets deserialize.")]
         public int residencyFoodCount = 2;
         public int maxResidents = 3;
 
@@ -54,6 +57,32 @@ namespace AnimalFarm.Spirits
         public float hopWeight = 1f;
         public float leafChaseWeight = 1f;
 
+        [Header("Nature bands (muscle 05: x = base/min, y = max; individuals roll inside, training climbs to max)")]
+        public Vector2Int vigorBand = new Vector2Int(2, 9);
+        public Vector2Int graceBand = new Vector2Int(2, 9);
+        public Vector2Int gleamBand = new Vector2Int(2, 9);
+
+        [Tooltip("Muscle 06: trait ids a WOVEN cryptid of this species may inherit/roll. Empty = all allowed.")]
+        public string[] allowedTraitIds;
+
+        /// <summary>True when this species may carry the trait (empty list = any).</summary>
+        public bool AllowsTrait(string traitId)
+        {
+            if (allowedTraitIds == null || allowedTraitIds.Length == 0) return true;
+            for (int i = 0; i < allowedTraitIds.Length; i++)
+                if (allowedTraitIds[i] == traitId) return true;
+            return false;
+        }
+
+        /// <summary>The authored (min, max) of one Nature stat, sanitised to 1..SpiritStats.Ceiling.</summary>
+        public void GetBand(SpiritStat stat, out int min, out int max)
+        {
+            Vector2Int b = stat == SpiritStat.Vigor ? vigorBand
+                : stat == SpiritStat.Grace ? graceBand : gleamBand;
+            min = Mathf.Clamp(b.x, 1, SpiritStats.Ceiling);
+            max = Mathf.Clamp(b.y, min, SpiritStats.Ceiling);
+        }
+
         [Header("Voice (synth chirps; owner mic gibberish replaces at skin phase)")]
         [Tooltip("Base chirp frequency in Hz.")]
         public float voiceBasePitch = 520f;
@@ -61,6 +90,9 @@ namespace AnimalFarm.Spirits
         public float voiceContour = 0.5f;
         [Tooltip("Length of one chirp in seconds.")]
         public float voiceChirpSeconds = 0.09f;
+
+        [Header("Mood animation (muscle 03 - happy / neutral / sad-sick posture, bob style, pace)")]
+        public SpiritAnimProfile animProfile = new SpiritAnimProfile();
 
         [Header("Needs & Spirit (morale, 0..100)")]
         [Tooltip("Game-hours from fully fed back to hungry.")]
@@ -89,5 +121,8 @@ namespace AnimalFarm.Spirits
         public string taskDescription;
         [Tooltip("Hint shown when an ascension attempt fails on the unfinished task.")]
         public string taskHint;
+
+        [Header("Biome affinity (muscle 02: Hard No / Dislike / Neutral / Like / Love; missing row = Neutral)")]
+        public BiomeAffinityEntry[] biomeAffinities;
     }
 }

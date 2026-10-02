@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1cdbe103791336488c0ad80ce7f8ac6, type: 3}
+  m_Name: chain_bogwick
+  m_EditorClassIdentifier: 
+  chainId: bogwick
+  appear: {fileID: 11400000, guid: 1a366cb03d646224b95a222ab19bac34, type: 2}
+  visit: {fileID: 11400000, guid: 4ac235ebbbafda84d83a89882c55cc56, type: 2}
+  resident: {fileID: 11400000, guid: 73dd44334d7f2c94e9bca35a93361f1e, type: 2}
+  fulfil: {fileID: 0}

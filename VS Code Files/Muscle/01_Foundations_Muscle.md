@@ -3,6 +3,36 @@
 **Skeleton status:** complete (see `Slices/01_Foundations.md`). Walking, camera, interaction, time, save all work but are *inoffensive* — nothing fights you, nothing rewards you.
 **Goal of this muscle pass:** make it pleasant to simply exist in the world. Every verdict below is an owner decision (2026-09-30, question-round format).
 
+## Build status (2026-10-01, wave 2)
+
+Compiled clean, awaiting owner playtest (QA checklist: F8 in-game tool).
+
+**BUILT (by build-list item)**
+1. ToolUseAction - committed ~0.5s swing, movement locked for the beat, held-button chain with a ~0.12s breath.
+2. ShepherdXP + Level - XP per verb, level N needs 100*N more XP, level-up fanfare, saved.
+3. ToolTier data - tier 2 = x0.65 action time, tier 3 = x0.5; Hoe and Pail tier 3 hit a 3-cell row, Shovel gets speed only.
+4. Blacksmith - tier 2 = 40 obols + level 3, tier 3 = 100 obols + level 6.
+5. VendorArrivals - Blacksmith moves in at 40 tiles tilled.
+6. Four-direction facing - separate up / down / side placeholder sprites per skin (left = flipped side).
+7. Sprint character - dust puffs, scamper bob, visual-only spirit startle.
+8. CameraFollow clamp - owned-land union + soft margin, grows with parcels.
+9. Sit & rest - Z / gamepad East: nearby happy spirits gather, mood ticks up, rest theme, free camera roam.
+10. Walk juice - PARTIAL: per-surface footsteps (grass swish, dirt crunch, scrub rustle, sand hiss) and the grass leaf-puff trail.
+11. Interaction unification - PARTIAL: facing-weighted focus.
+
+**NOT BUILT**
+- E opening the same context menu as the mouse, and the outline highlight (needs keyboard/gamepad menu nav; owner question 3).
+- Shallow-water wading: the pond rim still blocks movement (owner question 5).
+- Grass bend in your wake and ambient plant wind-sway (owner question 4).
+- Flute. The lantern exists only as road gear (see Muscle 08); its night identity (spirits drift to the glow) is not built.
+
+**ASSUMPTIONs made in build**
+- Sit uses a dedicated Rest action (not hold-Interact): up to 6 happy spirits within 8 units, +0.15 Spirit/s each (about +9/min), capped at 90; camera pan radius 16; 24 s rest-theme loop; sitting refused mid-swing, in modals, during competitions and while riding.
+- Interaction focus: range 1.4 units, distance squared scaled x1.8 (behind) to x0.5 (ahead), x0.8 stickiness for the current focus.
+- Footstep stride 0.95 units, sprint ~25% louder; leaf puffs only on grass.
+- Camera margin 4 units past owned land; Blacksmith threshold 40 tiles; tier prices/levels as above.
+- Audio safety net added alongside (AudioGuard rate limiter, output limiter, diag log, Ctrl+M panic kill, Voice and Ambient volume sliders).
+
 ---
 
 ## Verdicts (locked)

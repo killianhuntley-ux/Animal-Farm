@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ded63c081d17e14a94b817050e3c734, type: 3}
+  m_Name: set_bogwick_appear
+  m_EditorClassIdentifier: 
+  conditions:
+  - {fileID: 11400000, guid: e590ce7581f5fb9428642b61e6446481, type: 2}
+  - {fileID: 11400000, guid: 8d517b5c90dab3c4b8c7020eb33c3d7e, type: 2}
+  - {fileID: 11400000, guid: 9eb9b24836e4cae4ea5f3df20fbfd1e8, type: 2}

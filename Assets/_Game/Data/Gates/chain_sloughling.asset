@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1cdbe103791336488c0ad80ce7f8ac6, type: 3}
+  m_Name: chain_sloughling
+  m_EditorClassIdentifier: 
+  chainId: sloughling
+  appear: {fileID: 11400000, guid: 75d32e72329f2d040b2ffa58c69f7e09, type: 2}
+  visit: {fileID: 11400000, guid: 5afa5ba11a032c4438934fcb7c24b4d0, type: 2}
+  resident: {fileID: 11400000, guid: 8eeb824cea4d34742ae209a97eb49b27, type: 2}
+  fulfil: {fileID: 0}

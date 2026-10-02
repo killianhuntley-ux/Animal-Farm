@@ -22,6 +22,8 @@ namespace AnimalFarm.Requirements
                 && scorer.GetBiomeScore(baseId) >= minScore;
         }
 
+        public override ConditionTopic Topic => ConditionTopic.Ground;
+
         public override string Describe()
         {
             var scorer = BiomeScorer.Instance;

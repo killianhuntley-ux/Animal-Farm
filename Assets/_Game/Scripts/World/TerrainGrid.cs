@@ -13,8 +13,9 @@ namespace AnimalFarm.World
         Scrub = 0, // untended wild ground (the "barren" of barren->lush)
         Dirt = 1,  // tilled, plantable
         Grass = 2, // sown, lush
-        Water = 3, // dug pond; impassable (the shallow rim is a RENDER state, not a surface)
-        Sand = 4   // arid ground (desert biomes; bought by the load from vendors later)
+        Water = 3, // dug pond; deep cells are impassable, the shallow RIM (auto-derived, not a surface) is wadeable
+        Sand = 4,  // arid ground (desert biomes; bought by the load from vendors later)
+        Mud = 5    // rich swamp soil: plantable like Dirt, ALWAYS wet, counts toward Swamp (APPENDED: saves store this byte)
     }
 
     /// <summary>
@@ -59,7 +60,7 @@ namespace AnimalFarm.World
         [SerializeField] private RectInt[] seedWaterRects;
 
         private const float WateredHours = 24f; // one game-day per soaking
-        private const int SurfaceTypeCount = 5;
+        public const int SurfaceTypeCount = 6; // one slot per Surface value (census arrays size off this)
         private static readonly Color WateredTint = new Color(0.70f, 0.68f, 0.88f);
 
         // Approximate on-screen colour of each surface's placeholder sprite --
@@ -70,7 +71,8 @@ namespace AnimalFarm.World
             new Color(0.42f, 0.31f, 0.22f), // Dirt
             new Color(0.30f, 0.50f, 0.26f), // Grass
             new Color(0.22f, 0.38f, 0.55f), // Water
-            new Color(0.80f, 0.72f, 0.48f)  // Sand (flat runtime tile)
+            new Color(0.80f, 0.72f, 0.48f), // Sand (flat runtime tile)
+            new Color(0.31f, 0.23f, 0.16f)  // Mud (flat runtime tile, speckled grey detail)
         };
         private static readonly Color ShallowWaterColor = new Color(0.40f, 0.58f, 0.66f); // sun-lit rim
         private static readonly Color RoadColor = new Color(0.39f, 0.30f, 0.21f);         // packed earth (kept under the dirt sprite base -- multiply tints cannot brighten)
@@ -78,6 +80,7 @@ namespace AnimalFarm.World
         private static readonly Color LockedDim = new Color(0.55f, 0.55f, 0.55f);         // unpurchased cluster land
         private static readonly Color MurkTint = new Color(0.80f, 0.84f, 0.74f);          // swamp ground cast
         private const float EdgeBlend = 0.25f; // how far a cell's colour leans into differing neighbours
+        private const float FloodBlend = 0.7f; // how far a flooded cell reads toward shallow-water colour
 
         // zones (render-only; gameplay reads the usable mask)
         private const byte ZoneBuffer = 0, ZoneCluster = 1, ZoneRoad = 2;
@@ -119,8 +122,14 @@ namespace AnimalFarm.World
         private readonly int[] _counts = new int[SurfaceTypeCount]; // usable cells only
         private readonly List<Vector2Int> _borderCells = new List<Vector2Int>();
         private bool _borderDirty = true;
+        private Tile _flatMudTile;          // runtime speckled mud tile (grey detail x SetColor)
+        private Transform _playerTf;        // cached for the deep-water nudge (rare path)
+        private Rigidbody2D _playerRb;
         private Tile _flatSandTile;         // runtime white tiles coloured via SetColor --
         private Tile _flatShallowTile;      // multiply-tints can't BRIGHTEN sprite tiles
+        private Tile _flatFloodTile;        // temporary rain-flood shallows (walkable, view-only)
+        private bool[] _flooded;            // transient (NOT saved): PondFlood owns the on/off state
+        private bool _floodActive;
 
         private void Awake()
         {
@@ -132,6 +141,7 @@ namespace AnimalFarm.World
             _usable = new bool[n];
             _zone = new byte[n];
             _sownAnchor = new bool[n];
+            _flooded = new bool[n];
             _wateredUntil = new float[n];
 
             StampZones();
@@ -144,7 +154,9 @@ namespace AnimalFarm.World
                     y >= initialUsableY && y < initialUsableY + initialUsableH;
 
             _flatSandTile = MakeFlatTile(Tile.ColliderType.None, "FlatSand");
-            _flatShallowTile = MakeFlatTile(Tile.ColliderType.Grid, "FlatShallow"); // rim still blocks walking
+            _flatShallowTile = MakeFlatTile(Tile.ColliderType.None, "FlatShallow"); // the rim is WADEABLE (deep Tile_Water keeps its Grid collider)
+            _flatMudTile = MakeMudTile();
+            _flatFloodTile = MakeFlatTile(Tile.ColliderType.None, "FlatFlood");      // flood never blocks anyone
 
             RecountAll();
             RepaintAll();
@@ -209,6 +221,36 @@ namespace AnimalFarm.World
             return tile;
         }
 
+        /// <summary>Rich-mud tile (runtime art): a 16x16 grey speckle (dark clumps,
+        /// a few wet glints) that SetColor multiplies into the mud brown. Seeded,
+        /// so every run draws the same ground. Never blocks walking.</summary>
+        private static Tile MakeMudTile()
+        {
+            const int N = 16;
+            var rng = new System.Random(4242);
+            var px = new Color32[N * N];
+            for (int i = 0; i < px.Length; i++)
+            {
+                float v = 0.86f + (float)(rng.NextDouble() - 0.5) * 0.12f;
+                double roll = rng.NextDouble();
+                if (roll < 0.07) v -= 0.16f;      // dark clump
+                else if (roll > 0.975) v += 0.14f; // wet glint
+                byte b = (byte)Mathf.Clamp(Mathf.RoundToInt(v * 255f), 0, 255);
+                px[i] = new Color32(b, b, b, 255);
+            }
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var tile = ScriptableObject.CreateInstance<Tile>();
+            tile.name = "FlatMud";
+            tile.sprite = UnityEngine.Sprite.Create(tex, new Rect(0f, 0f, N, N),
+                new Vector2(0.5f, 0.5f), N); // 16 px at 16 ppu = exactly one cell
+            tile.colliderType = Tile.ColliderType.None;
+            tile.color = Color.white;
+            return tile;
+        }
+
         // ---- mapping --------------------------------------------------------
 
         public bool InBounds(Vector2Int cell) =>
@@ -241,6 +283,16 @@ namespace AnimalFarm.World
         public bool IsShallowRim(Vector2Int cell) =>
             InBounds(cell) && IsShallowRimRaw(cell.x, cell.y);
 
+        /// <summary>True for a Water cell with NO land neighbour: the solid centre
+        /// of a pond (its tile keeps a collider; the shallow rim does not).</summary>
+        public bool IsDeepWater(Vector2Int cell) =>
+            InBounds(cell) && IsDeepWaterRaw(cell.x, cell.y);
+
+        /// <summary>True when a world point sits over a wadeable shallow-rim cell
+        /// (the shepherd slows here; footsteps slosh and splash).</summary>
+        public bool IsWadingAt(Vector3 world) =>
+            TryWorldToCell(world, out var cell) && IsShallowRimRaw(cell.x, cell.y);
+
         /// <summary>Percentage (0..100) of USABLE land held by a surface type.
         /// NOTE: unlocking a parcel dilutes percentages -- bigger land is harder
         /// to keep lush. Flagged as a tuning question for the owner.</summary>
@@ -269,8 +321,123 @@ namespace AnimalFarm.World
             _sownAnchor[idx] = s == Surface.Grass && sownByHand;
 
             RepaintAround(cell); // neighbours re-blend; rims may flip
+            if (_floodActive) RecomputeFlood(); // the pond edge moved: so does the flood
+            if (s == Surface.Water || old == Surface.Water) NudgeShepherdFromDeepWater(); // a rim cell may have just gone deep
             OnSurfaceChanged?.Invoke(cell, s);
             return true;
+        }
+
+        /// <summary>
+        /// The rim is walkable but deep water is solid. When a surface change turns
+        /// the cell UNDER the shepherd deep (e.g. the last land beside it was
+        /// dug), move them to the nearest walkable cell so nobody is entombed.
+        /// Rare path: the player lookup is cached and runs only on water edits.
+        /// </summary>
+        private void NudgeShepherdFromDeepWater()
+        {
+            if (_playerTf == null)
+            {
+                var p = GameObject.FindWithTag("Player");
+                if (p == null) return;
+                _playerTf = p.transform;
+                _playerRb = p.GetComponent<Rigidbody2D>();
+            }
+
+            Vector3 pos = _playerRb != null ? (Vector3)_playerRb.position : _playerTf.position;
+            if (!TryWorldToCell(pos, out var here) || !IsDeepWaterRaw(here.x, here.y)) return;
+
+            bool found = false;
+            Vector2Int best = here;
+            float bestSqr = float.MaxValue;
+            for (int r = 1; r <= 8 && !found; r++)
+            {
+                for (int dy = -r; dy <= r; dy++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != r) continue; // this ring only
+                    int nx = here.x + dx, ny = here.y + dy;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    int idx = nx + ny * width;
+                    if (IsDeepWaterRaw(nx, ny)) continue;
+                    if (!_usable[idx] && _zone[idx] == ZoneCluster) continue; // never into a locked parcel
+                    float sqr = ((Vector2)CellCenterWorld(new Vector2Int(nx, ny)) - (Vector2)pos).sqrMagnitude;
+                    if (sqr < bestSqr) { bestSqr = sqr; best = new Vector2Int(nx, ny); found = true; }
+                }
+            }
+            if (!found) return;
+
+            Vector3 to = CellCenterWorld(best);
+            if (_playerRb != null) { _playerRb.position = to; _playerRb.linearVelocity = Vector2.zero; }
+            _playerTf.position = to;
+            AnimalFarm.Core.Puffs.Burst(to, new Color(0.55f, 0.72f, 0.82f, 0.9f), 6, 1.2f);
+        }
+
+        // ---- rain flood (muscle 02: ponds swell a little, then recede) -------
+        // View + soak only: flooded cells are Scrub/Grass/Sand ground within one
+        // cell of a pond, drawn as shallows. The surface census, plants, homes and
+        // walking are untouched -- nothing is ever lost to a flood.
+
+        public bool FloodActive => _floodActive;
+
+        public bool IsFlooded(Vector2Int cell) =>
+            InBounds(cell) && _flooded[cell.x + cell.y * width];
+
+        /// <summary>Raises or recedes the pond-edge flood (PondFlood drives this).</summary>
+        public void SetFloodActive(bool on)
+        {
+            if (_floodActive == on) return;
+            _floodActive = on;
+            RecomputeFlood();
+        }
+
+        private void RecomputeFlood()
+        {
+            var changed = new List<Vector2Int>();
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int idx = x + y * width;
+                bool want = _floodActive && FloodEligible(x, y);
+                if (_flooded[idx] == want) continue;
+                _flooded[idx] = want;
+                changed.Add(new Vector2Int(x, y));
+            }
+            for (int i = 0; i < changed.Count; i++) RepaintAround(changed[i]);
+        }
+
+        private bool FloodEligible(int x, int y)
+        {
+            int idx = x + y * width;
+            if (!_usable[idx] || _zone[idx] == ZoneRoad) return false;
+            var s = (Surface)_cells[idx];
+            if (s == Surface.Water || s == Surface.Dirt || s == Surface.Mud) return false; // tilled soil is just soaked, never drowned
+            return HasWaterWithinOne(x, y);
+        }
+
+        private bool HasWaterWithinOne(int x, int y)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0) continue;
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                if ((Surface)_cells[nx + ny * width] == Surface.Water) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Waterlogged pond edges: soaks every usable Dirt cell touching a
+        /// pond (the flood's free watering; SetWatered refreshes a day's soak).</summary>
+        public void SoakWaterEdges()
+        {
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int idx = x + y * width;
+                if (!_usable[idx] || (Surface)_cells[idx] != Surface.Dirt) continue;
+                if (HasWaterWithinOne(x, y)) SetWatered(new Vector2Int(x, y));
+            }
         }
 
         // ---- watering (Water Pail; plants grow at full speed on wet soil) ----
@@ -290,6 +457,7 @@ namespace AnimalFarm.World
         public bool IsWatered(Vector2Int cell)
         {
             if (!InBounds(cell)) return false;
+            if ((Surface)_cells[cell.x + cell.y * width] == Surface.Mud) return true; // rich mud is ALWAYS wet
             float until = _wateredUntil[cell.x + cell.y * width];
             if (until <= 0f) return false;
             float now = AnimalFarm.Core.GameClock.Instance != null
@@ -498,6 +666,9 @@ namespace AnimalFarm.World
 
         // ---- view -----------------------------------------------------------
 
+        private bool IsDeepWaterRaw(int x, int y) =>
+            (Surface)_cells[x + y * width] == Surface.Water && !IsShallowRimRaw(x, y);
+
         private bool IsShallowRimRaw(int x, int y)
         {
             if ((Surface)_cells[x + y * width] != Surface.Water) return false;
@@ -525,6 +696,7 @@ namespace AnimalFarm.World
             Color abs;
             if (_zone[idx] == ZoneRoad && s != Surface.Water) abs = RoadColor;
             else if (s == Surface.Water && IsShallowRimRaw(x, y)) abs = ShallowWaterColor;
+            else if (_flooded[idx]) abs = Color.Lerp(SurfaceBaseColor[(int)s], ShallowWaterColor, FloodBlend);
             else abs = SurfaceBaseColor[(int)s];
 
             if (_usable[idx])
@@ -590,10 +762,25 @@ namespace AnimalFarm.World
                 flat = true;
                 return;
             }
+            if (_flooded[idx])
+            {
+                tile = _flatFloodTile;
+                spriteBase = Color.white;
+                flat = true;
+                return;
+            }
             if (s == Surface.Sand && sandTile == null)
             {
                 tile = _flatSandTile;
                 spriteBase = Color.white;
+                flat = true;
+                return;
+            }
+
+            if (s == Surface.Mud)
+            {
+                tile = _flatMudTile;
+                spriteBase = Color.white; // flat: the blended colour is drawn verbatim over the grey speckle
                 flat = true;
                 return;
             }
@@ -758,6 +945,7 @@ namespace AnimalFarm.World
 
             RecountAll();
             _borderDirty = true;
+            if (_floodActive) RecomputeFlood(); // mask follows the restored cells
             RepaintAll();
             OnUsableChanged?.Invoke();
         }

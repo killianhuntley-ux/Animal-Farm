@@ -38,6 +38,13 @@ namespace AnimalFarm.Player
         [SerializeField] private float sprintSquashMultiplier = 1.5f;
         [SerializeField] private float dustPuffInterval = 0.16f;      // seconds between foot puffs
 
+        // Seated pose (sit & rest): body 56px = 0.875u, squashed to 72% with the
+        // feet kept planted (drop = half the lost height); the head follows the top.
+        private const float SitEaseSeconds = 0.35f;
+        private const float SitBodyScaleY = 0.72f;
+        private const float SitBodyDrop = 0.12f;
+        private const float SitHeadDrop = 0.25f;
+
         private static readonly Color DustColor = new Color(0.76f, 0.68f, 0.54f, 0.75f);
 
         private ShepherdController _controller;
@@ -46,6 +53,7 @@ namespace AnimalFarm.Player
         private Vector3 _bodyInitialScale;
         private float _phase;
         private float _nextDustTime;
+        private float _sit01;
         private FacingPose _pose = FacingPose.Down; // FacingDir defaults to down
 
         private void Awake()
@@ -122,12 +130,17 @@ namespace AnimalFarm.Player
             float wave = Mathf.Sin(_phase);
             float bob = wave * amplitude;
 
+            // Seated pose (muscle 01 sit & rest): ease the body into a squat --
+            // squashed, feet planted, head dropped -- and back up on standing.
+            _sit01 = Mathf.MoveTowards(_sit01, ShepherdRest.IsSeated ? 1f : 0f, Time.deltaTime / SitEaseSeconds);
+
             if (bodyRenderer != null)
             {
                 var bodyT = bodyRenderer.transform;
-                bodyT.localPosition = _bodyInitialPos + Vector3.up * bob;
+                bodyT.localPosition = _bodyInitialPos + Vector3.up * bob + Vector3.down * (SitBodyDrop * _sit01);
 
                 float squashScale = moving ? 1f - Mathf.Abs(wave) * squash : 1f;
+                squashScale *= Mathf.Lerp(1f, SitBodyScaleY, _sit01);
                 bodyT.localScale = new Vector3(
                     _bodyInitialScale.x,
                     _bodyInitialScale.y * squashScale,
@@ -135,7 +148,8 @@ namespace AnimalFarm.Player
             }
 
             if (headRenderer != null)
-                headRenderer.transform.localPosition = _headInitialPos + Vector3.up * (bob * 1.15f);
+                headRenderer.transform.localPosition = _headInitialPos
+                    + Vector3.up * (bob * 1.15f) + Vector3.down * (SitHeadDrop * _sit01);
 
             UpdateFacing();
             UpdateSprintDust(sprinting);

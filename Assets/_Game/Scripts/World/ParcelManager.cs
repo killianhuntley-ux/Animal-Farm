@@ -14,7 +14,7 @@ namespace AnimalFarm.World
     ///
     ///   - HOME base: a 3x3 cluster of 10x8 fields. The centre field is owned
     ///     from the start; the other eight are bought one at a time at the
-    ///     Ferryman's Land Office. The whole cluster sits inside ONE perimeter
+    ///     Registrar's Land Office. The whole cluster sits inside ONE perimeter
     ///     fence (built by SceneBootstrapper), so locked fields are walkable
     ///     but refuse tools -- TerrainGrid draws them dimmed until bought.
     ///     The data model is cluster-agnostic (name + rect + baseId), so the
@@ -70,7 +70,7 @@ namespace AnimalFarm.World
             public int baseId;           // HomeBaseId / SwampBaseId; -1 for road rights
             public Rect rect;            // world-space area (field ground / road corridor)
             public Rect revealRect;      // area the camera clamp gains when unlocked
-            public int coinCost;         // obols -- the ferryman's toll
+            public int coinCost;         // obols
             public string blurb;         // flavor line for the Land Office overview
             public int prereqIndex = -1; // parcel that must be owned first (-1 = none)
             public Vector3 signPos;      // where the gate sign stands while locked
@@ -89,6 +89,22 @@ namespace AnimalFarm.World
         private bool _boundsDirty = true;
 
         public int ParcelCount => _parcels.Count;
+
+        /// <summary>True once the West Road Rights deed is bought (frontier systems wake up).</summary>
+        public bool RoadRightsOwned => _roadIndex >= 0 && IsUnlocked(_roadIndex);
+
+        /// <summary>Owned FIELD parcels (road rights excluded; the free hearth field counts).
+        /// The pouty mount's join trigger reads this.</summary>
+        public int UnlockedFieldCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < _parcels.Count; i++)
+                    if (_parcels[i].kind == ParcelKind.Field && _parcels[i].unlocked) n++;
+                return n;
+            }
+        }
 
         public bool IsUnlocked(int index) =>
             index >= 0 && index < _parcels.Count && _parcels[index].unlocked;
@@ -151,7 +167,7 @@ namespace AnimalFarm.World
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>All deeds on the Ferryman's books. Costs are obols; they
+        /// <summary>All deeds on the Registrar's books. Costs are obols; they
         /// climb with distance from the hearth, and the mire costs mire money.</summary>
         private void BuildParcelList()
         {
@@ -185,7 +201,7 @@ namespace AnimalFarm.World
                 rect = RoadRect,
                 revealRect = RoadRevealRect,
                 coinCost = 200,
-                blurb = "Passage west to Reedmire. The Ferryman tolls land as readily as water.",
+                blurb = "Passage west to Reedmire. The Registrar keeps a file on every road.",
                 signPos = new Vector3(-13.4f, 0f, 0f) // just inside the cluster's west gate
             });
 
@@ -373,7 +389,7 @@ namespace AnimalFarm.World
             sr.sortingOrder = 21; // just above the fence posts (20)
             if (spriteMaterial != null) sr.sharedMaterial = spriteMaterial;
 
-            WorldLabel.Attach(gate, p.name + "\nSee the Ferryman", -1.3f);
+            WorldLabel.Attach(gate, p.name + "\nSee the Land Office", -1.3f);
 
             // Trigger for the walk-up prompt and the click raycast.
             var col = gate.AddComponent<BoxCollider2D>();
@@ -452,7 +468,7 @@ namespace AnimalFarm.World
 
     /// <summary>
     /// INFO-ONLY gate sign for one locked parcel. Spawned by ParcelManager at
-    /// runtime; dies when the parcel opens. Purchasing moved to the Ferryman's
+    /// runtime; dies when the parcel opens. Purchasing moved to the Registrar's
     /// Land Office -- the gate just points the player there.
     /// </summary>
     public class ParcelGate : MonoBehaviour, IInteractable, ISelectable

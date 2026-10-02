@@ -80,7 +80,11 @@ namespace AnimalFarm.Player
         {
             var mouse = Mouse.current;
             if (mouse == null || !mouse.leftButton.wasPressedThisFrame) return;
-            if (UIInputLock.BlockDirectKeys) return;
+            // The context menu is itself modal (it holds ModalOpen): its own click-away /
+            // re-target must still run, but no other modal may be under it.
+            bool menuOwnsInput = SelectionMenuUI.Instance != null && SelectionMenuUI.Instance.IsOpen
+                && !UIInputLock.TextInputActive;
+            if (UIInputLock.BlockDirectKeys && !menuOwnsInput) return;
 
             var comp = AnimalFarm.Competitions.CompetitionManager.Instance;
             if (comp != null && comp.EventRunning) return;
@@ -114,16 +118,15 @@ namespace AnimalFarm.Player
             else
             {
                 var menu = SelectionMenuUI.Instance;
-                if (menu != null && menu.IsOpen) menu.Close(); // click-away
+                if (menu != null && menu.IsOpen)
+                {
+                    ConsumedClickFrame = Time.frameCount; // the click-away must not also swing a tool
+                    menu.Close(); // click-away
+                }
             }
         }
 
-        private static SelectionMenuUI EnsureMenu()
-        {
-            if (SelectionMenuUI.Instance != null) return SelectionMenuUI.Instance;
-            var go = new GameObject("SelectionMenuUI");
-            return go.AddComponent<SelectionMenuUI>();
-        }
+        private static SelectionMenuUI EnsureMenu() => SelectionMenuUI.GetOrCreate();
 
         // ---- move mode ---------------------------------------------------------
 

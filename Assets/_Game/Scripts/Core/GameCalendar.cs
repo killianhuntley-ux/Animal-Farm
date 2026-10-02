@@ -19,6 +19,14 @@ namespace AnimalFarm.Core
 
         [Tooltip("One-line flavor shown on the calendar page.")]
         public string flavor;
+
+        [Header("Villain mix (relative weights; the overall visit rate does not change)")]
+        [Tooltip("Relative weight of a Digger visit this season. All three at 0 = an even mix.")]
+        public float villainDigger;
+        [Tooltip("Relative weight of a Devourer visit this season.")]
+        public float villainDevourer;
+        [Tooltip("Relative weight of a Scarer visit this season.")]
+        public float villainScarer;
     }
 
     /// <summary>
@@ -174,28 +182,32 @@ namespace AnimalFarm.Core
                 name = "The Hush",
                 tint = new Color(0.95f, 0.97f, 1.00f),
                 rainWeight = 0.10f,
-                flavor = "The underworld holds its breath. Nobody asks for whom."
+                flavor = "The underworld holds its breath. Nobody asks for whom.",
+                villainDigger = 1f, villainDevourer = 1f, villainScarer = 3f // dread of the held breath
             },
             new SeasonDef
             {
                 name = "The Weep",
                 tint = new Color(0.86f, 0.90f, 1.00f),
                 rainWeight = 0.55f,
-                flavor = "The sky remembers everyone it ever swallowed. Loudly."
+                flavor = "The sky remembers everyone it ever swallowed. Loudly.",
+                villainDigger = 3f, villainDevourer = 1f, villainScarer = 1f // soft wet earth: burrowers
             },
             new SeasonDef
             {
                 name = "The Smolder",
                 tint = new Color(1.00f, 0.92f, 0.84f),
                 rainWeight = 0.05f,
-                flavor = "Warm, dry, and faintly smug about it."
+                flavor = "Warm, dry, and faintly smug about it.",
+                villainDigger = 1f, villainDevourer = 3f, villainScarer = 1f // parched and hungry: devourers
             },
             new SeasonDef
             {
                 name = "The Long Dim",
                 tint = new Color(0.84f, 0.84f, 0.95f),
                 rainWeight = 0.30f,
-                flavor = "The lanterns burn low. The dark is just being friendly."
+                flavor = "The lanterns burn low. The dark is just being friendly.",
+                villainDigger = 1f, villainDevourer = 1f, villainScarer = 3f // long dark: scarers
             }
         };
 

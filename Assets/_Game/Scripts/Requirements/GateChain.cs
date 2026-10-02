@@ -2,7 +2,10 @@ using UnityEngine;
 
 namespace AnimalFarm.Requirements
 {
-    /// <summary>The four progression gates every spirit chain moves through.</summary>
+    /// <summary>The four progression gates every spirit chain moves through.
+    /// Appear = silhouette shows up, Visit = it walks in as a visitor, Resident = the
+    /// STAY gate (while it is met a visitor may decide to join the flock - muscle 11),
+    /// Fulfil = reserved.</summary>
     public enum Gate
     {
         Appear,

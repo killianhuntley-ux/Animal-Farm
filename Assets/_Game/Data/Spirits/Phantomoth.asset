@@ -28,9 +28,44 @@ MonoBehaviour:
   stretchWeight: 0.6
   hopWeight: 0.7
   leafChaseWeight: 1.2
+  vigorBand: {x: 2, y: 4}
+  graceBand: {x: 5, y: 9}
+  gleamBand: {x: 5, y: 10}
+  allowedTraitIds: []
   voiceBasePitch: 880
   voiceContour: 0.3
   voiceChirpSeconds: 0.08
+  animProfile:
+    happy:
+      bobStyle: 4
+      bobFreqMul: 1.4
+      bobAmpMul: 1.5
+      speedMul: 1.2
+      bodyYOffset: 0.03
+      bodyScale: {x: 1.08, y: 1}
+      tiltDegrees: 0
+      swayDegrees: 6
+      saturation: 1
+    neutral:
+      bobStyle: 4
+      bobFreqMul: 0.9
+      bobAmpMul: 1
+      speedMul: 1
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 1
+    sadSick:
+      bobStyle: 0
+      bobFreqMul: 0.35
+      bobAmpMul: 0.5
+      speedMul: 0.6
+      bodyYOffset: -0.15
+      bodyScale: {x: 0.95, y: 0.88}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 0.5
   hungerHours: 12
   spiritDecayPerHungryHour: 8
   feedSpiritBoost: 15
@@ -45,3 +80,10 @@ MonoBehaviour:
   taskWindowEndHour: 1
   taskDescription: One last moonlit dance, at the stroke of midnight.
   taskHint: (sit with it at midnight)
+  biomeAffinities:
+  - biome: 1
+    affinity: 2
+  - biome: 2
+    affinity: 3
+  - biome: 3
+    affinity: 1

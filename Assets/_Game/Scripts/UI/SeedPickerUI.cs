@@ -31,7 +31,7 @@ namespace AnimalFarm.UI
         private static readonly Color PlantedColor = new Color(0.55f, 0.9f, 0.55f, 1f); // soft green (world floating text)
 
         private GameObject _panel;
-        private readonly List<PlantSpecies> _options = new List<PlantSpecies>();
+        private readonly List<UnityEngine.Events.UnityAction> _hotkeys = new List<UnityEngine.Events.UnityAction>(); // number-key actions, in row order
         private bool _open;
         private Vector2Int _cell;
 
@@ -56,9 +56,9 @@ namespace AnimalFarm.UI
         public void Open(Vector2Int cell)
         {
             if (_open) return;
+            _cell = cell; // BuildPanel filters the options by this cell's surface
             if (!BuildPanel()) return;
 
-            _cell = cell;
             _panel.SetActive(true);
             _open = true;
 
@@ -77,7 +77,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -109,6 +109,13 @@ namespace AnimalFarm.UI
             if (plant == null)
             {
                 inv.Add(seedId, 1); // owner law: never charge for nothing
+                string why = "(it will not take here)";
+                if (grid != null && species.shallowOnly && grid.GetSurface(cell) == Surface.Water
+                    && !grid.IsShallowRim(cell))
+                    why = "(too deep - try the shallows)";
+                else if (PlantManager.Instance.HasPlantAt(cell))
+                    why = "(something is already planted here)";
+                FloatingText.Show(at, why, UIStyle.Danger);
                 return;
             }
 
@@ -149,20 +156,33 @@ namespace AnimalFarm.UI
             }
         }
 
+        /// <summary>"Compost soil" option: works compost into the (still empty) dirt cell.</summary>
+        private void PickCompost()
+        {
+            var cell = _cell;
+            Close();
+
+            var compost = CompostManager.Instance;
+            var grid = TerrainGrid.Instance;
+            if (compost == null || grid == null) return;
+
+            if (!compost.TryEnrichSoil(cell))
+                FloatingText.Show(grid.CellCenterWorld(cell), "(nothing to compost with)", UIStyle.Danger);
+        }
+
         private void PollNumberKeys()
         {
             var keyboard = Keyboard.current;
             if (keyboard == null || AnimalFarm.Core.UIInputLock.TextInputActive) return;
 
-            // Index 0 = Grass, then the crop species (shifted down one).
-            int total = Mathf.Min(_options.Count + 1, 9);
+            // Rows in display order (Grass / Compost / crops, as the cell allows).
+            int total = Mathf.Min(_hotkeys.Count, 9);
             for (int i = 0; i < total; i++)
             {
                 // Key.Digit1..Digit9 are contiguous, so index off Digit1.
                 if (keyboard[Key.Digit1 + i].wasPressedThisFrame)
                 {
-                    if (i == 0) PickGrass();
-                    else Pick(_options[i - 1]);
+                    _hotkeys[i]?.Invoke();
                     return;
                 }
             }
@@ -212,35 +232,133 @@ namespace AnimalFarm.UI
             title.text = "Plant what here?";
             title.rectTransform.sizeDelta = new Vector2(0f, 48f);
 
-            _options.Clear();
+            _hotkeys.Clear();
 
             var inv = Inventory.Instance;
+            var terrain = TerrainGrid.Instance;
+            Surface here = terrain != null ? terrain.GetSurface(_cell) : Surface.Dirt;
 
-            // First option: Grass (number key 1) - sows the ground itself.
-            int grassOwned = inv != null ? inv.Count(GrassSeedId) : 0;
-            MakeOptionButton(panelRt,
-                "Grass (x " + grassOwned + ")",
-                grassOwned > 0 ? "spreads green underfoot" : "(buy at the vendor)",
-                PickGrass, grassOwned > 0);
+            if (here == Surface.Dirt)
+            {
+                // First option: Grass (number key 1) - sows the ground itself.
+                int grassOwned = inv != null ? inv.Count(GrassSeedId) : 0;
+                MakeOptionButton(panelRt,
+                    "Grass (x " + grassOwned + ")",
+                    grassOwned > 0 ? "spreads green underfoot" : "(buy at the vendor)",
+                    PickGrass, grassOwned > 0);
+                _hotkeys.Add(PickGrass);
+            }
 
+            if (here == Surface.Dirt || here == Surface.Mud)
+            {
+                // Compost the empty soil (tilled dirt or rich mud): the next crop sown here carries it.
+                var compost = CompostManager.Instance;
+                bool enriched = compost != null && compost.IsEnriched(_cell);
+                int compostOwned = compost != null ? compost.Available : 0;
+                MakeOptionButton(panelRt,
+                    "Compost soil (x " + compostOwned + ")",
+                    enriched ? "already enriched"
+                        : compostOwned > 0 ? "faster growth, finer crops"
+                        : "(happy spirits leave it; weeds give fiber)",
+                    PickCompost, compostOwned > 0 && !enriched);
+                _hotkeys.Add(PickCompost);
+            }
+
+            // Crops: only species that grow on THIS cell's ground (dirt crops on
+            // dirt; reeds and lilies on water).
             var species = tools.SeedSpecies;
             if (species != null)
             {
                 foreach (var s in species)
                 {
-                    if (s == null) continue;
-                    _options.Add(s);
+                    if (s == null || !s.GrowsOn(here)) continue;
 
                     var picked = s; // capture for the click closure
                     int owned = inv != null ? inv.Count(SeedItemId(picked)) : 0;
                     MakeSeedButton(panelRt, picked, owned, () => Pick(picked));
+                    _hotkeys.Add(() => Pick(picked));
                 }
             }
+
+            // Terrain material: a sand load repaints open ground (Dirt / Scrub / Grass).
+            int sandOwned = inv != null ? inv.Count(VendorUI.SandLoadId) : 0;
+            bool paintable = here == Surface.Dirt || here == Surface.Scrub || here == Surface.Grass;
+            if (paintable && sandOwned > 0)
+            {
+                MakeOptionButton(panelRt, "Sand load (x " + sandOwned + ")",
+                    "turns this cell to arid sand", PickSand, true);
+                _hotkeys.Add(PickSand);
+            }
+
+            // Rich mud (Mire Peddler): same open-ground rule as sand; always-wet swamp soil.
+            int mudOwned = inv != null ? inv.Count(SwampVendor.MudLoadId) : 0;
+            if (paintable && mudOwned > 0)
+            {
+                MakeOptionButton(panelRt, "Mud load (x " + mudOwned + ")",
+                    "turns this cell to rich swamp mud: always moist, crops grow fine but never gleam", PickMud, true);
+                _hotkeys.Add(PickMud);
+            }
+            if (here == Surface.Scrub || here == Surface.Grass) title.text = "Spread what here?";
 
             MakeCancelButton(panelRt, "Nothing", Close);
 
             _panel.SetActive(false);
             return true;
+        }
+
+        /// <summary>"Sand load" option: paints the (empty) cell as Sand. Consumes one load.</summary>
+        private void PickSand()
+        {
+            var cell = _cell;
+            Close();
+
+            var grid = TerrainGrid.Instance;
+            var inv = Inventory.Instance;
+            if (grid == null || inv == null || !grid.IsUsable(cell)) return;
+            if (PlantManager.Instance != null && PlantManager.Instance.HasPlantAt(cell)) return;
+            if (AnimalFarm.Spirits.Home.AnyAtCell(cell)) return;
+
+            var surface = grid.GetSurface(cell);
+            if (surface != Surface.Dirt && surface != Surface.Scrub && surface != Surface.Grass) return;
+            if (!inv.Consume(VendorUI.SandLoadId, 1))
+            {
+                FloatingText.Show(grid.CellCenterWorld(cell), "(no sand)", UIStyle.Danger);
+                return;
+            }
+
+            if (grid.SetSurface(cell, Surface.Sand))
+                FloatingText.Show(grid.CellCenterWorld(cell), "Spread sand", PlantedColor);
+            else
+                inv.Add(VendorUI.SandLoadId, 1); // owner law: never charge for nothing
+        }
+
+        /// <summary>"Mud load" option: paints the (empty) cell as rich Mud. Consumes one load.</summary>
+        private void PickMud()
+        {
+            var cell = _cell;
+            Close();
+
+            var grid = TerrainGrid.Instance;
+            var inv = Inventory.Instance;
+            if (grid == null || inv == null || !grid.IsUsable(cell)) return;
+            if (PlantManager.Instance != null && PlantManager.Instance.HasPlantAt(cell)) return;
+            if (AnimalFarm.Spirits.Home.AnyAtCell(cell)) return;
+
+            var surface = grid.GetSurface(cell);
+            if (surface != Surface.Dirt && surface != Surface.Scrub && surface != Surface.Grass) return;
+            if (!inv.Consume(SwampVendor.MudLoadId, 1))
+            {
+                FloatingText.Show(grid.CellCenterWorld(cell), "(no mud)", UIStyle.Danger);
+                return;
+            }
+
+            if (grid.SetSurface(cell, Surface.Mud))
+            {
+                FloatingText.Show(grid.CellCenterWorld(cell), "Spread rich mud", PlantedColor);
+                Puffs.Burst(grid.CellCenterWorld(cell), new Color(0.31f, 0.23f, 0.16f, 0.95f), 6, 1.0f);
+            }
+            else
+                inv.Add(SwampVendor.MudLoadId, 1); // owner law: never charge for nothing
         }
 
         private static void MakeSeedButton(Transform parent, PlantSpecies species, int owned, UnityEngine.Events.UnityAction onClick)

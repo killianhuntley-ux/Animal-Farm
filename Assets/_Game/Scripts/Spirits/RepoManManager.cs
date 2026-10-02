@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using AnimalFarm.Core;
 using AnimalFarm.Core.Saving;
+using AnimalFarm.Onboarding;
 using UnityEngine;
 
 namespace AnimalFarm.Spirits
@@ -14,9 +15,11 @@ namespace AnimalFarm.Spirits
     /// and takes it to the Holding Office unless stopped. The FIRST dispatch
     /// ever is a warning visit: he arrives, lectures, and takes nothing (kills
     /// the ignorance-window problem, research 5.2). Counters: soothe the
-    /// runaway back before he arrives (he turns around), or bribe him mid-walk
-    /// (2x the target's favored food). GameSettings.GentlePassage disables
-    /// dispatch entirely.
+    /// runaway back before he arrives (he turns around), or slip him obols to
+    /// look the other way (muscle 07: once per visit, the price rises every
+    /// time it is paid and is saved). He walks in along the town road from the
+    /// far end of the plaza and through the gates, whistling off-key.
+    /// GameSettings.GentlePassage disables dispatch entirely.
     /// </summary>
     public class RepoManManager : MonoBehaviour, ISaveable
     {
@@ -24,11 +27,31 @@ namespace AnimalFarm.Spirits
 
         private const float TickInterval = 1f;               // scaled seconds
         private const float RunawayHoursBeforeDispatch = 2f; // game-hours
-        /// <summary>Bribes and reclaims both cost 2x the favored food.</summary>
+        /// <summary>Reclaims cost 2x the favored food (the office stays transactional).</summary>
         public const int BribeFoodCount = 2;
 
-        /// <summary>World position of the town gate the Repo-man walks in from.</summary>
+        // Muscle 07 bribe: obols (coin id "coin"). ASSUMPTION: 8 first, +5 each
+        // time it is paid, capped at 40 so it never becomes a large loss.
+        private const int BribeBasePrice = 8;
+        private const int BribeStep = 5;
+        private const int BribeMaxPrice = 40;
+
+        private const string BribeHintLine =
+            "He can be bribed. Catch him before he reaches the spirit. The price only rises.";
+        private const string FirstVisitLine =
+            "Someone official is walking up the road. Today he only wants to talk.";
+
+        /// <summary>Fallback spot (reclaims with no Holding Office) in the town plaza.</summary>
         public static readonly Vector3 GatePosition = new Vector3(21.5f, 0f, 0f);
+
+        // The road he walks (see SceneBootstrapper): in from the plaza's far end
+        // (the east wall sits at x=37.5), west along y=0 through the home
+        // cluster's east gate, and on through the west gate and the swamp road
+        // when the runaway is out in the mire.
+        public static readonly Vector3 RoadEntry = new Vector3(36f, 0f, 0f);
+        private static readonly Vector3 HomeEastGate = new Vector3(15f, 0f, 0f);
+        private static readonly Vector3 HomeWestGate = new Vector3(-15f, 0f, 0f);
+        private static readonly Vector3 SwampGate = new Vector3(-27f, 0f, 0f);
 
         private static readonly Color PaperGrey = new Color(0.75f, 0.75f, 0.78f);
 
@@ -43,6 +66,8 @@ namespace AnimalFarm.Spirits
 
         private readonly List<SpiritSaveRecord> _held = new List<SpiritSaveRecord>();
         private bool _firstVisitDone;
+        private int _bribesPaid;          // saved: drives the escalating price
+        private bool _bribeHintShown;     // saved: the one-time guide line
 
         private bool _dispatchActive;
         private bool _activeWasWarning;
@@ -54,6 +79,28 @@ namespace AnimalFarm.Spirits
 
         /// <summary>True while a Repo-man is walking (dispatches are one at a time).</summary>
         public bool DispatchActive => _dispatchActive;
+
+        /// <summary>How many times the shepherd has paid him off (saved).</summary>
+        public int BribesPaid => _bribesPaid;
+
+        /// <summary>Obols the next bribe costs: rises every time one is paid.</summary>
+        public int NextBribePrice =>
+            Mathf.Min(BribeMaxPrice, BribeBasePrice + BribeStep * _bribesPaid);
+
+        /// <summary>
+        /// Pays the current bribe from the shepherd's obols. False (nothing
+        /// charged) if they can't afford it. On success the price steps up.
+        /// </summary>
+        public bool TryPayBribe()
+        {
+            int price = NextBribePrice;
+            if (Inventory.Instance == null || !Inventory.Instance.Consume("coin", price))
+                return false;
+
+            _bribesPaid++;
+            Debug.Log($"[Repo] Bribe paid: {price} obols. Next price: {NextBribePrice}.");
+            return true;
+        }
 
         // ---- lifecycle --------------------------------------------------------
 
@@ -140,7 +187,7 @@ namespace AnimalFarm.Spirits
             bool warning = !_firstVisitDone;
 
             var go = new GameObject("RepoMan");
-            go.transform.position = GatePosition;
+            go.transform.position = RoadEntry; // far end of the town road: he walks the whole way
             go.transform.localScale = Vector3.one * 1.5f;
 
             // Body renderer on a child so the officious bob never fights root movement.
@@ -158,19 +205,41 @@ namespace AnimalFarm.Spirits
             AnimalFarm.UI.WorldLabel.Attach(go, "The Repo-man");
 
             var agent = go.AddComponent<RepoManAgent>();
-            agent.Init(this, target, warning);
+            agent.Init(this, target, warning, BuildRoute(target.transform.position));
 
             _dispatchActive = true;
             _activeWasWarning = warning;
             _activeAgent = agent;
 
             string name = DisplayNameOf(target);
-            AnimalFarm.UI.AlarmBannerUI.Show(warning
+            AnimalFarm.UI.AlarmBannerUI.Show(this, warning
                 ? "SOMEONE OFFICIAL APPROACHES..."
                 : $"THE REPO-MAN COMES FOR {name.ToUpperInvariant()}");
             Debug.Log(warning
-                ? "[Repo] First dispatch: a warning visit approaches the gate."
+                ? "[Repo] First dispatch: a warning visit walks up the road."
                 : $"[Repo] Dispatch: the Repo-man comes for {name}.");
+
+            // Tutorial-type beats only: the first visit, and the first real one
+            // (where the bribe option appears).
+            if (warning) GuideMoments.Announce(FirstVisitLine);
+            else if (!_bribeHintShown)
+            {
+                _bribeHintShown = true;
+                GuideMoments.Announce(BribeHintLine);
+            }
+        }
+
+        /// <summary>
+        /// Road waypoints from the entry to the runaway's area, so he visibly
+        /// walks in through the gates instead of cutting across the fences.
+        /// </summary>
+        private static Vector3[] BuildRoute(Vector3 targetPos)
+        {
+            var route = new List<Vector3>();
+            if (targetPos.x < HomeEastGate.x) route.Add(HomeEastGate);
+            if (targetPos.x < HomeWestGate.x) route.Add(HomeWestGate);
+            if (targetPos.x < SwampGate.x) route.Add(SwampGate);
+            return route.ToArray();
         }
 
         /// <summary>
@@ -196,6 +265,13 @@ namespace AnimalFarm.Spirits
             return false;
         }
 
+        /// <summary>Console cheat: marks the free warning visit as already spent,
+        /// so the next dispatch is a real repossession (or bribe) visit.</summary>
+        public void Debug_MarkWarningSpent() => _firstVisitDone = true;
+
+        /// <summary>Console cheat: sets how many bribes have been paid (price steps follow).</summary>
+        public void Debug_SetBribesPaid(int n) => _bribesPaid = Mathf.Max(0, n);
+
         /// <summary>
         /// Called by the walking agent when its errand ends (took someone,
         /// lectured, was soothed away, or was bribed).
@@ -204,7 +280,7 @@ namespace AnimalFarm.Spirits
         {
             _dispatchActive = false;
             _activeAgent = null;
-            AnimalFarm.UI.AlarmBannerUI.Hide();
+            AnimalFarm.UI.AlarmBannerUI.Hide(this);
 
             // The one free warning has now been spent.
             if (_activeWasWarning) _firstVisitDone = true;
@@ -240,8 +316,12 @@ namespace AnimalFarm.Spirits
 
         /// <summary>
         /// Buys a held spirit back for 2x its species' favored food. On success
-        /// it respawns (shaken: spirit 35, half hungry) at the Holding Office
-        /// drop point, or the gate if no office exists.
+        /// it respawns (subdued but stable: a Resident again, spirit 35, half
+        /// hungry with the hunger clock reset to match) at the Holding Office
+        /// drop point, or the plaza if no office exists. The record was
+        /// snapshotted as a Runaway, so state AND the fed timestamp are
+        /// corrected here - otherwise it would exit in runaway mood (or
+        /// starving) and could flee again at once.
         /// </summary>
         public bool TryReclaim(int index, out string error)
         {
@@ -255,7 +335,7 @@ namespace AnimalFarm.Spirits
             if (species == null) { error = $"Unknown species '{rec.speciesId}'."; return false; }
 
             string food = species.favoredFoodId;
-            if (Inventory.Instance == null || !Inventory.Instance.Consume(food, BribeFoodCount))
+            if (Inventory.Instance == null || !CropQuality.ConsumeWorst(Inventory.Instance, food, BribeFoodCount))
             {
                 error = $"(needs {BribeFoodCount}x {food})";
                 return false;
@@ -267,9 +347,14 @@ namespace AnimalFarm.Spirits
                 ? HoldingOffice.Instance.DropPoint
                 : GatePosition;
 
-            // Released shaken: low spirit, half hungry, standing at the drop point.
+            // Released subdued but stable: a Resident (not Runaway), spirit well
+            // above the runaway threshold, half hungry, standing at the drop point.
+            rec.state = (int)SpiritState.Resident;
             rec.spirit = 35f;
             rec.hunger01 = 0.5f;
+            if (GameClock.Instance != null)
+                rec.lastFed = GameClock.Instance.TotalHours
+                    - rec.hunger01 * Mathf.Max(0.01f, species.hungerHours);
             rec.x = pos.x;
             rec.y = pos.y;
 
@@ -296,13 +381,20 @@ namespace AnimalFarm.Spirits
         {
             public List<SpiritSaveRecord> held = new List<SpiritSaveRecord>();
             public bool firstVisitDone;
+            public int bribesPaid;        // muscle 07: old saves read 0
+            public bool bribeHintShown;
         }
 
         public string SaveKey => "repoman";
 
         public string Capture()
         {
-            var state = new RepoState { firstVisitDone = _firstVisitDone };
+            var state = new RepoState
+            {
+                firstVisitDone = _firstVisitDone,
+                bribesPaid = _bribesPaid,
+                bribeHintShown = _bribeHintShown
+            };
             state.held.AddRange(_held);
             return JsonUtility.ToJson(state);
         }
@@ -315,16 +407,25 @@ namespace AnimalFarm.Spirits
             _dispatchActive = false;
             _activeWasWarning = false;
             _runawaySince.Clear();
-            AnimalFarm.UI.AlarmBannerUI.Hide();
+            AnimalFarm.UI.AlarmBannerUI.Hide(this);
+
+            // The agent's OnDestroy also closes it; this covers a modal opened
+            // after the agent was already cancelled.
+            if (AnimalFarm.UI.RepoBribeUI.Instance != null)
+                AnimalFarm.UI.RepoBribeUI.Instance.CloseIfOpen();
 
             _held.Clear();
             _firstVisitDone = false;
+            _bribesPaid = 0;
+            _bribeHintShown = false;
             if (string.IsNullOrEmpty(json)) return;
 
             var state = JsonUtility.FromJson<RepoState>(json);
             if (state == null) return;
 
             _firstVisitDone = state.firstVisitDone;
+            _bribesPaid = Mathf.Max(0, state.bribesPaid);
+            _bribeHintShown = state.bribeHintShown;
             if (state.held != null) _held.AddRange(state.held);
         }
     }

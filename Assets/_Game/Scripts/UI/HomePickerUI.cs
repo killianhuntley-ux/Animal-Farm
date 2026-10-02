@@ -56,7 +56,7 @@ namespace AnimalFarm.UI
 
             Rebuild();
             if (_options.Count == 0 && loomSprite == null && waystoneSprite == null
-                && !PadUnlocked)
+                && !PadUnlocked && !TrainingBuildingManager.Unlocked && !TapestryBuildRows.AnyCarried)
             {
                 var player = GameObject.FindWithTag("Player");
                 FloatingText.Show(
@@ -86,7 +86,7 @@ namespace AnimalFarm.UI
             if (GameInput.Instance != null)
             {
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -147,6 +147,7 @@ namespace AnimalFarm.UI
             }
 
             BuildStructureRows();
+            TapestryBuildRows.Build(_panelRt, Close); // muscle 06: carried tapestry banners
 
             var cancel = UIStyle.MakeButton(_panelRt, "Never mind", Close, 22);
             ((RectTransform)cancel.transform).sizeDelta = new Vector2(0f, 42f);
@@ -163,7 +164,8 @@ namespace AnimalFarm.UI
         private void BuildStructureRows()
         {
             bool padUnlocked = PadUnlocked;
-            if (loomSprite == null && waystoneSprite == null && !padUnlocked)
+            bool trainUnlocked = TrainingBuildingManager.Unlocked;
+            if (loomSprite == null && waystoneSprite == null && !padUnlocked && !trainUnlocked)
                 return; // nothing structural to offer yet
 
             UIStyle.MakeDivider(_panelRt);
@@ -195,6 +197,49 @@ namespace AnimalFarm.UI
                     built ? "Ascension Pad (built)" : "Ascension Pad - " + AscensionPadCost + " obols",
                     "where the river comes to meet them", PickAscensionPad, !built);
             }
+
+            // Training grounds (muscle 05): spirits use these on their own.
+            // Compact single-line rows - the menu is already tall.
+            if (trainUnlocked)
+            {
+                var trainHeader = UIRoot.MakeText(_panelRt, "TrainingHeader", 20,
+                    TextAnchor.MiddleCenter, UIStyle.Grey);
+                trainHeader.text = "Training grounds (spirits use them on their own)";
+                trainHeader.rectTransform.sizeDelta = new Vector2(0f, 26f);
+
+                for (int i = 0; i < TrainingBuilding.Specs.Length; i++)
+                {
+                    var spec = TrainingBuilding.Specs[i];
+                    bool full = TrainingBuildingManager.CountOf(spec.id) >= TrainingBuildingManager.MaxPerKind;
+                    string label = full
+                        ? spec.displayName + " (max built)"
+                        : spec.displayName + " - " + spec.cost + " obols (" + SpiritStats.Label(spec.stat) + ")";
+                    var b = UIStyle.MakeButton(_panelRt, label, () => PickTraining(spec), 20);
+                    ((RectTransform)b.transform).sizeDelta = new Vector2(0f, 40f);
+                    if (full) b.interactable = false;
+                }
+            }
+        }
+
+        private void PickTraining(TrainingSpec spec)
+        {
+            Close();
+            if (spec == null || SelectionController.Instance == null) return;
+            if (TrainingBuildingManager.CountOf(spec.id) >= TrainingBuildingManager.MaxPerKind) return;
+
+            if (!TryPay(spec.cost)) return;
+
+            SelectionController.Instance.BeginPlaceBuilding(TrainingBuilding.GetSprite(spec.id), spec.scale,
+                cell => SelectionController.IsPlaceableCell(cell) && !TrainingBuilding.AnyAtCell(cell),
+                (cell, world) =>
+                {
+                    TrainingBuilding.Create(spec, world);
+                    Bleeps.Play(BleepKind.Build);
+                    FloatingText.Show(world + Vector3.up * 1.2f, spec.displayName + " built", UIStyle.Gold);
+                    ShepherdProgress.Grant("build");
+                    AnimalFarm.World.VendorArrivals.Note("buildsPlaced"); // hidden vendor move-in milestone
+                },
+                () => Refund(spec.cost));
         }
 
         /// <summary>Button row with a small grey flavor sub-line; greyed out

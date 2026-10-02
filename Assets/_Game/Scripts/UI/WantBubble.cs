@@ -2,8 +2,10 @@ using UnityEngine;
 
 namespace AnimalFarm.UI
 {
-    /// <summary>The four legible spirit wants a bubble can show.</summary>
-    public enum WantKind { Food = 0, Water = 1, Lonely = 2, Home = 3 }
+    /// <summary>The legible spirit wants a bubble can show. Wrong (muscle 02) is the
+    /// "this ground feels wrong" exclamation - shown directly, never a ranked want.
+    /// Land (muscle 11) is a visitor wanting the LAND itself changed (a sprout icon).</summary>
+    public enum WantKind { Food = 0, Water = 1, Lonely = 2, Home = 3, Wrong = 4, Land = 5 }
 
     /// <summary>
     /// Small world-space thought bubble above a spirit (muscle 03). Built once
@@ -22,7 +24,7 @@ namespace AnimalFarm.UI
         private const int Tex = 32; // icon/bubble texture size in pixels
 
         private static Sprite _bubbleSprite;
-        private static readonly Sprite[] _iconSprites = new Sprite[4];
+        private static readonly Sprite[] _iconSprites = new Sprite[6];
 
         private SpriteRenderer _bg;
         private SpriteRenderer _icon;
@@ -150,6 +152,16 @@ namespace AnimalFarm.UI
                     f = (x, y) => Mathf.Max(
                         Disc(x, y, 10f, 16f, 3.2f),
                         Disc(x, y, 21f, 16f, 3.2f));
+                    break;
+                case WantKind.Wrong: // exclamation mark: bar over a dot
+                    f = (x, y) => Mathf.Max(
+                        Box(x, y, 13.8f, 13f, 17.2f, 25.5f),
+                        Disc(x, y, 15.5f, 8f, 2.8f));
+                    break;
+                case WantKind.Land: // sprout: a stem with two leaf lobes
+                    f = (x, y) => Mathf.Max(
+                        Box(x, y, 14.6f, 6f, 16.4f, 18f),
+                        Mathf.Max(Disc(x, y, 10.5f, 20f, 4.6f), Disc(x, y, 20.5f, 22f, 4.6f)));
                     break;
                 default: // WantKind.Home: triangle roof over a little wall
                     f = (x, y) => Mathf.Max(

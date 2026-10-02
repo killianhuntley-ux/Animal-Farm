@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f12ae884f7b736d4dbd9540918af97d1, type: 3}
+  m_Name: Trait_gentle
+  m_EditorClassIdentifier: 
+  id: gentle
+  displayName: Gentle
+  flavor: Moves as if apologising to the grass.
+  rollWeight: 1
+  conflictsWith:
+  - rowdy
+  napMul: 1.2
+  stretchMul: 1.5
+  hopMul: 0.7
+  leafChaseMul: 1
+  trainingAppetite: 0.9
+  vigorAppetite: 1
+  graceAppetite: 1.3
+  gleamAppetite: 1
+  baitAppetite: 1

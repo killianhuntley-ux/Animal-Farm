@@ -23,3 +23,6 @@ MonoBehaviour:
   produceId: wheat
   produceAmount: 2
   tint: {r: 1, g: 1, b: 1, a: 1}
+  regrows: 0
+  regrowStage: 1
+  shallowOnly: 0

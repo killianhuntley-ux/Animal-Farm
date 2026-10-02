@@ -5,7 +5,7 @@
 
 Until now everything was debug-free. This slice turns the taps on and prices the world.
 
-**OWNER DECISION (2026-09-29): shops are a physical TOWN, not a menu.** A settlement a short walk from the starting field: vendor stalls, the Ferryman's landing, later the competition board. Spirits can accompany you via a **"follow me" treat** — a purchasable item that triggers the follow behaviour (built in slice 04 for altar-guiding) for a duration. Scope adds: town zone layout (greybox), walk-distance tuning, treat item + duration, and NPC stall interactables replacing abstract shop UI-only access.
+**OWNER DECISION (2026-09-29): shops are a physical TOWN, not a menu.** A settlement a short walk from the starting field: vendor stalls, the Land Office (The Registrar; Charon rule 2026-10-01), later the competition board. Spirits can accompany you via a **"follow me" treat** — a purchasable item that triggers the follow behaviour (built in slice 04 for altar-guiding) for a duration. Scope adds: town zone layout (greybox), walk-distance tuning, treat item + duration, and NPC stall interactables replacing abstract shop UI-only access.
 
 ---
 
@@ -20,7 +20,7 @@ Until now everything was debug-free. This slice turns the taps on and prices the
 - **Sinks:** land parcels (primary, 08) · entry fees · helpers/equipment · seeds/materials · Repo-man fines · building placements.
 - **Vendor NPCs (GDD §3.6 proposed roster, now real):**
   - **General vendor** — seeds, materials, food (economy floor)
-  - **The Ferryman** — land deeds (expansion is buying passage) + competition master of ceremonies; one character, two hats, maximum reuse
+  - ~~**The Ferryman**~~ **The Registrar** (Charon rule 2026-10-01: Charon appears ONLY at the Styx) — land deeds (expansion is buying passage) + competition master of ceremonies; one character, two hats, maximum reuse
   - **Builder** — structures, supervisor equipment, helper contracts
   - Healer/medium deferred until a system needs it (soothing may suffice — don't build an NPC without a job)
 - **Shop UI** (one pattern reused for all vendors) + first-pass price table as a single tuning asset.
@@ -28,7 +28,7 @@ Until now everything was debug-free. This slice turns the taps on and prices the
 
 ## Content
 
-- 3 vendor NPC rigs/skins + barks (tone register: the Ferryman is dry; the vendor is cheerfully morbid), shop stock tables, price pass #1 across every existing sink/source.
+- 3 vendor NPC rigs/skins + barks (tone register: the Registrar is dry; the vendor is cheerfully morbid), shop stock tables, price pass #1 across every existing sink/source.
 
 ## Out of scope
 

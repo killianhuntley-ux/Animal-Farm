@@ -27,6 +27,9 @@ namespace AnimalFarm.World
     /// no-calendar fallback): 25% base chance +3% per resident beyond the
     /// second, capped at 40% so big farms are never under siege. A rolled
     /// visit arrives at a random hour (8:00-20:00) and lasts 1-2 game-hours.
+    /// SEASON MIX: the visit rate is season-blind, but WHICH villain comes is
+    /// weighted by the underworld season (GameCalendar.SeasonDef.villain* data;
+    /// Hush/Long Dim favor Scarers, Weep Diggers, Smolder Devourers).
     ///
     /// Watchlights ward villains exactly like weeds: a villain never steps
     /// inside a ward radius, and when everything it wants is warded it paces,
@@ -139,6 +142,18 @@ namespace AnimalFarm.World
             if (clock.Hours < _pendingHour) return;
 
             _pendingDay = -1;
+
+            // Muscle 08 ward charm (consumable, per villain kind): a carried charm
+            // of the matching kind is spent and the visit turns back at the fence.
+            var wardee = GameObject.FindWithTag("Player");
+            Vector3 wardAt = wardee != null ? wardee.transform.position : Vector3.zero;
+            if (RoadGoods.TryConsumeWard(_pendingKind, wardAt))
+            {
+                FloatingText.Show(wardAt + Vector3.up * 1.5f,
+                    "(something unpleasant turns back at the fence)", UIStyle.Gold);
+                return;
+            }
+
             SpawnVisit(_pendingKind);
         }
 
@@ -157,7 +172,51 @@ namespace AnimalFarm.World
 
             _pendingDay = day;
             _pendingHour = Random.Range(EarliestArrivalHour, LatestArrivalHour);
-            _pendingKind = (VillainKind)Random.Range(0, 3);
+            _pendingKind = PickKindForSeason();
+        }
+
+        // ---- season mix (owner verdict 2026-10-01) -------------------------------
+
+        /// <summary>
+        /// The Digger / Devourer / Scarer mix for a calendar season, as fractions
+        /// summing to 1. Read from the season def (GameCalendar.SeasonDef.villain*);
+        /// all-zero (or no calendar) = an even mix. Only the MIX varies by season:
+        /// the visit chance, ward charms and damage caps are untouched.
+        /// </summary>
+        public static void SeasonMix(int seasonIndex, out float digger, out float devourer, out float scarer)
+        {
+            digger = devourer = scarer = 1f;
+            var cal = GameCalendar.Instance;
+            if (cal != null)
+            {
+                var def = cal.GetSeason(seasonIndex);
+                float d = Mathf.Max(0f, def.villainDigger);
+                float v = Mathf.Max(0f, def.villainDevourer);
+                float s = Mathf.Max(0f, def.villainScarer);
+                if (d + v + s > 0f) { digger = d; devourer = v; scarer = s; }
+            }
+            float sum = digger + devourer + scarer;
+            digger /= sum; devourer /= sum; scarer /= sum;
+        }
+
+        private static VillainKind PickKindForSeason()
+        {
+            var cal = GameCalendar.Instance;
+            SeasonMix(cal != null ? cal.SeasonIndex : 0, out float digger, out float devourer, out float scarer);
+            float r = Random.value;
+            if (r < digger) return VillainKind.Digger;
+            if (r < digger + devourer) return VillainKind.Devourer;
+            return VillainKind.Scarer;
+        }
+
+        /// <summary>Console: one line with this season's villain mix, e.g. "The Weep: Digger 60%, Devourer 20%, Scarer 20%".</summary>
+        public static string Debug_SeasonMixLine(int seasonIndex)
+        {
+            SeasonMix(seasonIndex, out float d, out float v, out float s);
+            var cal = GameCalendar.Instance;
+            string name = cal != null ? cal.GetSeasonName(seasonIndex) : "season " + seasonIndex;
+            return name + ": Digger " + Mathf.RoundToInt(d * 100f) + "%, Devourer "
+                + Mathf.RoundToInt(v * 100f) + "%, Scarer " + Mathf.RoundToInt(s * 100f) + "%";
         }
 
         private static int CountResidents()
@@ -193,7 +252,7 @@ namespace AnimalFarm.World
             Bleeps.Play(BleepKind.Alarm, 0.35f); // low, uneasy - not a siren
             FloatingText.Show(entry + Vector3.up * 0.8f,
                 "something unpleasant slips in...", UIStyle.Grey);
-            AlarmBannerUI.Show(BannerLine(kind));
+            AlarmBannerUI.Show(this, BannerLine(kind));
             return true;
         }
 
@@ -218,7 +277,7 @@ namespace AnimalFarm.World
         public void OnVillainGone(VillainAgent agent, Vector3 exitPos, bool drivenOff)
         {
             if (_activeAgent == agent) _activeAgent = null;
-            AlarmBannerUI.Hide();
+            AlarmBannerUI.Hide(this);
             Bleeps.Play(BleepKind.Soothe, 0.6f);
             FloatingText.Show(exitPos + Vector3.up * 0.8f,
                 drivenOff ? "driven off!" : "(the air clears)",
@@ -231,7 +290,7 @@ namespace AnimalFarm.World
         {
             if (_activeAgent != agent) return;
             _activeAgent = null;
-            AlarmBannerUI.Hide();
+            AlarmBannerUI.Hide(this);
         }
 
         // ---- holes ------------------------------------------------------------------
@@ -317,7 +376,7 @@ namespace AnimalFarm.World
             if (_activeAgent != null) _activeAgent.CancelSilently();
             _activeAgent = null;
             _pendingDay = -1;
-            AlarmBannerUI.Hide();
+            AlarmBannerUI.Hide(this);
 
             for (int i = _holes.Count - 1; i >= 0; i--)
                 if (_holes[i] != null) Destroy(_holes[i].gameObject);
@@ -435,6 +494,30 @@ namespace AnimalFarm.World
             col.radius = 0.45f;
 
             WorldLabel.Attach(gameObject, "Hole", -0.5f);
+        }
+
+        // ---- flattening ------------------------------------------------------------
+
+        /// <summary>
+        /// Hoe hook (muscle 07: holes are re-flattened with the hoe): one swing
+        /// levels a hole on this cell, with the same dirt puff and toast as
+        /// a finished tamp. False if there is no hole there.
+        /// </summary>
+        public static bool TryFlattenAt(Vector2Int cell)
+        {
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var hole = _all[i];
+                if (hole == null || hole.Cell != cell) continue;
+
+                Puffs.Burst(hole.transform.position, DirtBrown, 7, 1.2f, 0.3f, 0.09f);
+                FloatingText.Show(hole.transform.position + Vector3.up * 0.4f,
+                    "flattened!", UIStyle.Gold);
+                if (VillainManager.Instance != null) VillainManager.Instance.RemoveHole(hole);
+                else Destroy(hole.gameObject);
+                return true;
+            }
+            return false;
         }
 
         // ---- tamping ------------------------------------------------------------

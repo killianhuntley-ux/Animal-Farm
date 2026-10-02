@@ -15,5 +15,5 @@ MonoBehaviour:
   chainId: bansheep
   appear: {fileID: 11400000, guid: d5d24633c82e5b24d99de9c3c3cf469b, type: 2}
   visit: {fileID: 11400000, guid: 74b7314f2c74af2468c32e4e7b0455e1, type: 2}
-  resident: {fileID: 11400000, guid: 74b7314f2c74af2468c32e4e7b0455e1, type: 2}
+  resident: {fileID: 11400000, guid: 74a11f05418c1624f8706d1103269aee, type: 2}
   fulfil: {fileID: 0}

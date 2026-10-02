@@ -75,10 +75,18 @@ namespace AnimalFarm.Core
 
         // ------------------------------------------------------------- Playing
 
+        // Cached names so the guard key costs no allocation per play.
+        private static readonly string[] _kindNames = System.Enum.GetNames(typeof(BleepKind));
+
         public static void Play(BleepKind kind, float volume = 1f)
         {
             if (Muted || volume <= 0f || !Application.isPlaying) return;
             if (SfxVolume <= 0f) return; // bus turned all the way down
+
+            // Central gate: mute/solo, retrigger spacing, per-frame and per-second caps.
+            int ki = (int)kind;
+            string key = ki >= 0 && ki < _kindNames.Length ? _kindNames[ki] : kind.ToString();
+            if (!AudioGuard.TryPlay(AudioBus.Sfx, key, volume)) return;
 
             var clip = GetClip(kind);
             if (clip == null) return;
@@ -158,15 +166,21 @@ namespace AnimalFarm.Core
         private static float Decay(float t, float life) =>
             Mathf.Exp(-6f * t / Mathf.Max(life, 0.001f));
 
-        /// <summary>30 ms soft square blip at 880 Hz, fast decay.</summary>
+        /// <summary>
+        /// 30 ms soft square-ish blip at 880 Hz, fast decay. Built from three
+        /// odd-harmonic sines (1, 1/3, 1/5) instead of a raw square, so it keeps
+        /// the hollow feel without aliased edges. Peak ~0.16 (was 0.18).
+        /// </summary>
         private static float[] GenClick()
         {
             var d = NewBuffer(0.03f);
             for (int i = 0; i < d.Length; i++)
             {
                 float t = i / (float)SampleRate;
-                float sq = Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 880f * t)); // raw square
-                d[i] = 0.18f * sq * Decay(t, 0.025f);                        // soft + fast fade
+                float w = 2f * Mathf.PI * 880f * t;
+                float sq = Mathf.Sin(w) + Mathf.Sin(3f * w) / 3f + Mathf.Sin(5f * w) / 5f; // peak ~0.93
+                float ramp = Mathf.Clamp01(t / 0.002f);                                   // no onset click
+                d[i] = 0.17f * sq * ramp * Decay(t, 0.025f);                              // soft + fast fade
             }
             return d;
         }
@@ -266,11 +280,14 @@ namespace AnimalFarm.Core
         private static float[] GenAlarm()
         {
             var d = NewBuffer(0.4f);
+            double phase = 0.0; // accumulated, so the pitch switch never jumps the waveform
             for (int i = 0; i < d.Length; i++)
             {
                 float t = i / (float)SampleRate;
                 float f = ((int)(t / 0.1f) & 1) == 0 ? 330f : 349f; // E4 vs F4 - uneasy
-                d[i] = 0.26f * Mathf.Sin(2f * Mathf.PI * f * t) * Decay(t, 0.45f);
+                phase += 2.0 * System.Math.PI * f / SampleRate;
+                if (phase > 2.0 * System.Math.PI) phase -= 2.0 * System.Math.PI;
+                d[i] = 0.26f * (float)System.Math.Sin(phase) * Decay(t, 0.45f);
             }
             return d;
         }
@@ -307,6 +324,18 @@ namespace AnimalFarm.Core
     /// </summary>
     public class BleepsWireup : MonoBehaviour
     {
+        // Burst coalescing: AoE tools change many cells in one frame and
+        // harvests/orbs add items in bursts, so the signals only MARK work
+        // and Update turns each burst into a single sound.
+        private const float SurfaceChirpGap = 0.12f;    // min seconds between surface chirps
+        private const float InventoryPingWindow = 0.1f; // gains inside this window = one ping
+
+        private bool _surfaceDirty;
+        private float _nextSurfaceChirpAt;
+        private float _pingDueAt = -1f;     // <0 = nothing pending
+        private int _pingRank;              // 0 none, 1 harvest, 2 essence, 3 coin
+        private float _lastPingAt = -999f;
+
         // Last-seen counts so inventory bleeps fire only on GAINS.
         private readonly Dictionary<string, int> _lastCounts = new Dictionary<string, int>();
 
@@ -353,6 +382,31 @@ namespace AnimalFarm.Core
 
         private bool Armed => Time.unscaledTime >= _armedAt;
 
+        private void Update()
+        {
+            float now = Time.unscaledTime;
+
+            // One chirp per burst of terrain edits (a 25-tile hoe stroke = one chirp).
+            if (_surfaceDirty && now >= _nextSurfaceChirpAt)
+            {
+                _surfaceDirty = false;
+                _nextSurfaceChirpAt = now + SurfaceChirpGap;
+                if (Armed) Bleeps.Play(BleepKind.Plant, 0.35f);
+            }
+
+            // One ping per cluster of inventory gains; the richest kind wins.
+            if (_pingDueAt >= 0f && now >= _pingDueAt)
+            {
+                int rank = _pingRank;
+                _pingDueAt = -1f;
+                _pingRank = 0;
+                _lastPingAt = now;
+                if (rank >= 3) Bleeps.Play(BleepKind.Coin);
+                else if (rank == 2) Bleeps.Play(BleepKind.Coin, 0.6f);
+                else if (rank == 1) Bleeps.Play(BleepKind.Harvest, 0.5f);
+            }
+        }
+
         private void OnInventoryChanged(string id, int count)
         {
             _lastCounts.TryGetValue(id, out int prev);
@@ -360,9 +414,10 @@ namespace AnimalFarm.Core
 
             if (!Armed || count <= prev) return; // only gains make a sound
 
-            if (id == "coin") Bleeps.Play(BleepKind.Coin);
-            else if (id == "essence") Bleeps.Play(BleepKind.Coin, 0.6f);
-            else Bleeps.Play(BleepKind.Harvest, 0.5f);
+            int rank = id == "coin" ? 3 : id == "essence" ? 2 : 1;
+            if (rank > _pingRank) _pingRank = rank;
+            if (_pingDueAt < 0f)
+                _pingDueAt = Mathf.Max(Time.unscaledTime + InventoryPingWindow, _lastPingAt + InventoryPingWindow);
         }
 
         private void OnNamingRequested(SpiritAgent agent)
@@ -372,7 +427,7 @@ namespace AnimalFarm.Core
 
         private void OnSurfaceChanged(Vector2Int cell, Surface surface)
         {
-            if (Armed) Bleeps.Play(BleepKind.Plant, 0.35f);
+            _surfaceDirty = true; // Update plays at most one chirp for the whole burst
         }
     }
 }

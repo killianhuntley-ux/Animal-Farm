@@ -19,7 +19,7 @@ namespace AnimalFarm.Spirits
         /// CirclePlay/Squabble are pair moves started by the
         /// SpiritSocialManager and share the agent's single quirk slot.
         /// </summary>
-        public enum Kind { None, Nap, Stretch, Hop, LeafChase, CirclePlay, Squabble }
+        public enum Kind { None, Nap, Stretch, Hop, LeafChase, CirclePlay, Squabble, Train }
 
         private const float AnchorRescanSeconds = 12f;
 
@@ -31,12 +31,19 @@ namespace AnimalFarm.Spirits
         // ---- quirk picking ---------------------------------------------------
 
         /// <summary>Weighted pick from the species' quirk frequency fields.</summary>
-        public static Kind Pick(SpiritSpeciesDefinition species)
+        public static Kind Pick(SpiritSpeciesDefinition species) => Pick(species, null);
+
+        /// <summary>Weighted pick: species weights x the individual's trait multipliers (muscle 05).</summary>
+        public static Kind Pick(SpiritSpeciesDefinition species, IReadOnlyList<SpiritTraitDefinition> traits)
         {
-            float nap = species != null ? Mathf.Max(0f, species.napWeight) : 1f;
-            float stretch = species != null ? Mathf.Max(0f, species.stretchWeight) : 1f;
-            float hop = species != null ? Mathf.Max(0f, species.hopWeight) : 1f;
-            float leaf = species != null ? Mathf.Max(0f, species.leafChaseWeight) : 1f;
+            float nap = (species != null ? Mathf.Max(0f, species.napWeight) : 1f)
+                * SpiritTraits.QuirkMul(traits, Kind.Nap);
+            float stretch = (species != null ? Mathf.Max(0f, species.stretchWeight) : 1f)
+                * SpiritTraits.QuirkMul(traits, Kind.Stretch);
+            float hop = (species != null ? Mathf.Max(0f, species.hopWeight) : 1f)
+                * SpiritTraits.QuirkMul(traits, Kind.Hop);
+            float leaf = (species != null ? Mathf.Max(0f, species.leafChaseWeight) : 1f)
+                * SpiritTraits.QuirkMul(traits, Kind.LeafChase);
 
             float total = nap + stretch + hop + leaf;
             if (total <= 0f) return Kind.None;

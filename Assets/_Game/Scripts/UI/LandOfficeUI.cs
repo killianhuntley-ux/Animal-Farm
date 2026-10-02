@@ -6,11 +6,11 @@ using UnityEngine.UI;
 namespace AnimalFarm.UI
 {
     /// <summary>
-    /// The Ferryman's LAND OFFICE modal: a Cities-Skylines-style parcel
+    /// The Registrar's LAND OFFICE modal: a Cities-Skylines-style parcel
     /// overview. One row-card per ParcelManager parcel -- name, blurb, size,
     /// and either an OWNED stamp or a "Buy - N obols" button (coins are
     /// Inventory item "coin"; "obols" is the fiction word). Opened by the
-    /// FerrymanStall or by any parcel gate sign's "About this land".
+    /// LandOfficeStall or by any parcel gate sign's "About this land".
     /// VendorUI pattern: gameplay input blocked while open, shell built once,
     /// content rebuilt on every open and after every transaction.
     /// TODO: muscle phase: mini-map preview + terrain stats per parcel.
@@ -68,7 +68,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -129,11 +129,11 @@ namespace AnimalFarm.UI
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             var title = UIRoot.MakeText(panelRt, "Title", 34, TextAnchor.MiddleCenter, UIStyle.Cream);
-            title.text = "The Ferryman";
+            title.text = "The Registrar";
             title.rectTransform.sizeDelta = new Vector2(0f, 44f);
 
             var subtitle = UIRoot.MakeText(panelRt, "Subtitle", 19, TextAnchor.MiddleCenter, UIStyle.Grey);
-            subtitle.text = "Passage costs. It always has.";
+            subtitle.text = "Every inch is on file. Every file has a fee.";
             subtitle.rectTransform.sizeDelta = new Vector2(0f, 28f);
 
             _obolsText = UIRoot.MakeText(panelRt, "Obols", 24, TextAnchor.MiddleCenter, UIStyle.Gold);

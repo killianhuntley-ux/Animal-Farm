@@ -24,27 +24,40 @@ namespace AnimalFarm.UI
         private const int TreatPrice = 5;
         private const int MysterySeedPrice = 12;
         private const int WatchlightPrice = 30;
+        private const int SandPackPrice = 8;   // terrain material: sand, by the load
+        private const int SandPackLoads = 4;
+        public const string SandLoadId = "sand_load";
 
         private static readonly Color CoinGold = new Color(1f, 0.9f, 0.5f);
 
         /// <summary>What the vendor buys, and for how much per unit. Items not
         /// listed here (coin, treat, ...) are not sellable.</summary>
-        private static readonly string[] SellIds = { "wheat", "berry", "bloom", "essence" };
-        private static readonly int[] SellPrices = { 3, 4, 5, 8 };
+        // "fiber" = scrap from pulled weeds (muscle 07 useful weeds): 1 obol,
+        // so even weeding pays a little.
+        private static readonly string[] SellIds = { "wheat", "berry", "bloom", "essence", "fiber" };
+        private static readonly int[] SellPrices = { 3, 4, 5, 8, 1 };
 
         /// <summary>Seed packets the vendor sells (one packet = one planting).</summary>
         private static readonly string[] SeedIds =
-            { "seed_grass", "seed_palewheat", "seed_gravebloom", "seed_murkberry" };
+            { "seed_grass", "seed_palewheat", "seed_gravebloom", "seed_murkberry", "seed_reed", "seed_glowcaplily" };
         private static readonly string[] SeedNames =
-            { "Grass Seed", "Palewheat Seed", "Gravebloom Seed", "Murkberry Seed" };
-        private static readonly int[] SeedPrices = { 2, 3, 4, 4 };
+            { "Grass Seed", "Palewheat Seed", "Gravebloom Seed", "Murkberry Seed", "Reed Seed", "Glowcap Lily Seed" };
+        private static readonly int[] SeedPrices = { 2, 3, 4, 4, 3, 5 };
         private static readonly string[] SeedSubs =
         {
             "one patch of living green",
             "a pale crop; spirits hunger for it",
             "a flower for the mournful",
-            "a dark berry for darker tastes"
+            "a dark berry for darker tastes",
+            "plant it on a pond's shallow rim; regrows",
+            "floats on deep water; swamp-lovers swoon"
         };
+
+        // Muscle 02 crop depth: water-crop produce plus the Fine / Gleaming tiers
+        // of every crop sell here (Normal wheat/berry/bloom are in SellIds above).
+        private static readonly string[] CropBaseIds = { "wheat", "berry", "bloom", "reed", "glowcap" };
+        private static readonly int[] CropBasePrices = { 3, 4, 5, 3, 7 };
+        private const int NormalCropsInSellIds = 3; // wheat, berry, bloom
 
         private GameObject _panel;
         private Text _coinsText;
@@ -91,7 +104,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -129,6 +142,27 @@ namespace AnimalFarm.UI
             {
                 FloatingText.Show(PlayerPos() + Vector3.up * 0.8f,
                     "(needs " + price + " obols)", UIStyle.Danger);
+            }
+
+            RebuildContent();
+        }
+
+        /// <summary>Terrain material goods (muscle 02): a pack of sand loads, one load
+        /// paints one cell via the contextual picker (Interact on open ground).</summary>
+        private void BuySand()
+        {
+            var inv = Inventory.Instance;
+            if (inv == null) return;
+
+            if (inv.Consume("coin", SandPackPrice))
+            {
+                inv.Add(SandLoadId, SandPackLoads);
+                FloatingText.Show(PlayerPos() + Vector3.up * 0.8f, "+" + SandPackLoads + " sand loads", CoinGold);
+            }
+            else
+            {
+                FloatingText.Show(PlayerPos() + Vector3.up * 0.8f,
+                    "(needs " + SandPackPrice + " obols)", UIStyle.Danger);
             }
 
             RebuildContent();
@@ -281,6 +315,23 @@ namespace AnimalFarm.UI
                         56f, () => SellAll(capturedId, capturedPrice));
                     sellable++;
                 }
+
+                // Quality tiers (and water-crop produce): better stock, better price.
+                for (int c = 0; c < CropBaseIds.Length; c++)
+                for (int t = 0; t <= (int)CropTier.Gleaming; t++)
+                {
+                    if (t == (int)CropTier.Normal && c < NormalCropsInSellIds) continue;
+                    var tier = (CropTier)t;
+                    string id = CropQuality.ItemId(CropBaseIds[c], tier);
+                    int count = inv.Count(id);
+                    if (count <= 0) continue;
+
+                    int unit = CropQuality.SellPrice(CropBasePrices[c], tier);
+                    string capturedId = id;
+                    MakeButton(_content, "Sell all " + CropQuality.DisplayName(id) + " (+" + (count * unit) + " obols)",
+                        56f, () => SellAll(capturedId, unit));
+                    sellable++;
+                }
             }
 
             if (sellable == 0)
@@ -307,6 +358,17 @@ namespace AnimalFarm.UI
 
             MakeTwoLineButton(_content, "Watchlight - " + WatchlightPrice + " obols",
                 "wards off weeds; place it where you wander least", BuyWatchlight, enabled: true);
+
+            // Road gear (muscle 08): the lantern + per-villain ward charms.
+            for (int g = 0; g < RoadGoods.TownStock.Length; g++)
+            {
+                var good = RoadGoods.TownStock[g]; // capture for the click closure
+                MakeTwoLineButton(_content, good.label + " - " + good.price + " obols", good.sub,
+                    () => { RoadGoods.Buy(good); RebuildContent(); }, enabled: true);
+            }
+
+            MakeTwoLineButton(_content, "Sand (" + SandPackLoads + " loads) - " + SandPackPrice + " obols",
+                "one load paints one cell of open ground (Interact); arid biomes", BuySand, enabled: true);
 
             MakeTwoLineButton(_content, "Mystery Seed - " + MysterySeedPrice + " obols",
                 "(soon)", null, enabled: false);

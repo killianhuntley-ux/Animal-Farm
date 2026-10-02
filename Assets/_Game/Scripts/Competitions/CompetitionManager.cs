@@ -125,7 +125,8 @@ namespace AnimalFarm.Competitions
             if (cam != null) cam.ClearOverrideTarget();
 
             bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-            if (GameInput.Instance != null && !paused) GameInput.Instance.SetGameplayBlocked(false);
+            // EventRunning is already false above, so AnyOwnerHolds does not count this event.
+            if (GameInput.Instance != null && !paused && !UIInputLock.AnyOwnerHolds) GameInput.Instance.SetGameplayBlocked(false);
 
             EventFinished?.Invoke(spirit, result);
         }

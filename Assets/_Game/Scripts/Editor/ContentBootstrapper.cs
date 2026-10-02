@@ -12,13 +12,14 @@ namespace AnimalFarm.EditorTools
     /// and the dummy gate chains that light the requirement-engine debug lamps.
     /// Deterministic and re-runnable (get-or-create by path).
     /// </summary>
-    public static class ContentBootstrapper
+    public static partial class ContentBootstrapper
     {
         private const string ArtDir = "Assets/_Game/Art/Placeholder/";
         private const string TileDir = "Assets/_Game/Art/Tiles";
         private const string PlantDir = "Assets/_Game/Data/Plants";
         private const string GateDir = "Assets/_Game/Data/Gates";
         private const string SpiritDir = "Assets/_Game/Data/Spirits";
+        private const string TraitDir = "Assets/_Game/Data/Traits";
 
         [MenuItem("AnimalFarm/Generate Content Assets")]
         public static void Generate()
@@ -35,6 +36,8 @@ namespace AnimalFarm.EditorTools
             GenerateGates();
             GenerateSpirits();
             GenerateRecipes();
+            GenerateTraits();
+            GenerateFrontier(); // swamp species + biome affinity (muscle 08; ContentBootstrapper.Frontier.cs)
 
             AssetDatabase.SaveAssets();
             Debug.Log("[Content] Tiles, plants, gates and spirit species generated.");
@@ -85,12 +88,23 @@ namespace AnimalFarm.EditorTools
                 hoursPerStage: 6f, produceId: "wheat", produceAmount: 2);
             MakePlant("gravebloom", "Gravebloom", new[] { "plant_sprout", "gravebloom_mid", "gravebloom_ripe" },
                 hoursPerStage: 8f, produceId: "bloom", produceAmount: 1);
+            // Berry-bush style: harvest drops it back to its mid stage (stage 1).
             MakePlant("murkberry", "Murkberry", new[] { "plant_sprout", "murkberry_mid", "murkberry_ripe" },
-                hoursPerStage: 10f, produceId: "berry", produceAmount: 3);
+                hoursPerStage: 10f, produceId: "berry", produceAmount: 3, regrows: true);
+
+            // Water species (muscle 02): planted ON Water cells from the bank, feed swamp scoring.
+            // Reeds: shallow rim only, regrow. Glowcap lilies: any water cell, one-shot.
+            MakePlant("reed", "Reed", new[] { "plant_sprout", "reed_mid", "reed_ripe" },
+                hoursPerStage: 5f, produceId: "reed", produceAmount: 2, regrows: true,
+                surface: Surface.Water, shallowOnly: true);
+            MakePlant("glowcaplily", "Glowcap Lily", new[] { "plant_sprout", "glowcap_mid", "glowcap_ripe" },
+                hoursPerStage: 9f, produceId: "glowcap", produceAmount: 1, regrows: false,
+                surface: Surface.Water, shallowOnly: false);
         }
 
         private static void MakePlant(string id, string displayName, string[] stageSprites,
-            float hoursPerStage, string produceId, int produceAmount)
+            float hoursPerStage, string produceId, int produceAmount,
+            bool regrows = false, Surface surface = Surface.Dirt, bool shallowOnly = false)
         {
             var species = GetOrCreate<PlantSpecies>($"{PlantDir}/{displayName}.asset");
             var sprites = new Sprite[stageSprites.Length];
@@ -100,9 +114,12 @@ namespace AnimalFarm.EditorTools
             SetField(species, "displayName", displayName);
             SetField(species, "stageSprites", sprites);
             SetField(species, "hoursPerStage", hoursPerStage);
-            SetField(species, "requiredSurface", Surface.Dirt);
+            SetField(species, "requiredSurface", surface);
             SetField(species, "produceId", produceId);
             SetField(species, "produceAmount", produceAmount);
+            SetField(species, "regrows", regrows);
+            SetField(species, "regrowStage", 1);
+            SetField(species, "shallowOnly", shallowOnly);
             EditorUtility.SetDirty(species);
         }
 
@@ -110,7 +127,9 @@ namespace AnimalFarm.EditorTools
         {
             AssetDatabase.LoadAssetAtPath<PlantSpecies>($"{PlantDir}/Palewheat.asset"),
             AssetDatabase.LoadAssetAtPath<PlantSpecies>($"{PlantDir}/Gravebloom.asset"),
-            AssetDatabase.LoadAssetAtPath<PlantSpecies>($"{PlantDir}/Murkberry.asset")
+            AssetDatabase.LoadAssetAtPath<PlantSpecies>($"{PlantDir}/Murkberry.asset"),
+            AssetDatabase.LoadAssetAtPath<PlantSpecies>($"{PlantDir}/Reed.asset"),
+            AssetDatabase.LoadAssetAtPath<PlantSpecies>($"{PlantDir}/Glowcap Lily.asset")
         };
 
         // ---- gates -----------------------------------------------------------
@@ -139,8 +158,31 @@ namespace AnimalFarm.EditorTools
             var resMausoleum = Cond<ResidentPresentCondition>("cond_res_mausoleum",
                 ("speciesId", "mausoleum"), ("minCount", 1));
 
-            // species gate sets — resident mirrors visit (residency itself is
-            // per-individual feeding, handled by SpiritAgent); fulfil = slice 04.
+            // STAY-gate atoms (muscle 11): what makes a visitor decide to join on its own.
+            var wheat1Ripe = Cond<PlantCountCondition>("cond_palewheat_1ripe",
+                ("speciesId", "palewheat"), ("minStage", 2), ("minCount", 1));
+            var wheat3Ripe = Cond<PlantCountCondition>("cond_palewheat_3ripe",
+                ("speciesId", "palewheat"), ("minStage", 2), ("minCount", 3));
+            var bloom3Ripe = Cond<PlantCountCondition>("cond_gravebloom_3ripe",
+                ("speciesId", "gravebloom"), ("minStage", 2), ("minCount", 3));
+            var berry2Ripe = Cond<PlantCountCondition>("cond_murkberry_2ripe",
+                ("speciesId", "murkberry"), ("minStage", 2), ("minCount", 2));
+            var water3 = Cond<SurfacePercentCondition>("cond_water_3",
+                ("surface", Surface.Water), ("minPercent", 3f));
+            var homeGrassland = Cond<BiomeIsCondition>("cond_home_grassland",
+                ("baseId", ParcelManager.HomeBaseId), ("biome", BiomeType.Grassland), ("minScore", 0f));
+
+            // Water-plant atoms (muscle 02) for swamp-spirit chains to wire later.
+            Cond<PlantCountCondition>("cond_reed_2any",
+                ("speciesId", "reed"), ("minStage", 0), ("minCount", 2));
+            Cond<PlantCountCondition>("cond_reed_3ripe",
+                ("speciesId", "reed"), ("minStage", 2), ("minCount", 3));
+            Cond<PlantCountCondition>("cond_glowcaplily_1any",
+                ("speciesId", "glowcaplily"), ("minStage", 0), ("minCount", 1));
+
+            // species gate sets: Appear (silhouette) -> Visit (visitor) -> Resident = the
+            // STAY gate (muscle 11): while it is met a visitor rolls to decide to join on
+            // its own - no feeding quota. Fulfil = slice 04.
             var mausAppear = Set("set_mausoleum_appear", grass8);
             var mausVisit = Set("set_mausoleum_visit", grass15);
             var shepAppear = Set("set_bansheep_appear", wheat2Any);
@@ -150,10 +192,16 @@ namespace AnimalFarm.EditorTools
             var mothAppear = Set("set_phantomoth_appear", night, bloom1Any);
             var mothVisit = Set("set_phantomoth_visit", night, bloom2Ripe);
 
-            Chain("chain_mausoleum", "mausoleum", mausAppear, mausVisit, mausVisit, null);
-            Chain("chain_bansheep", "bansheep", shepAppear, shepVisit, shepVisit, null);
-            Chain("chain_wrabbit", "wrabbit", wrabAppear, wrabVisit, wrabVisit, null);
-            Chain("chain_phantomoth", "phantomoth", mothAppear, mothVisit, mothVisit, null);
+            // Stay = the favoured crop fully grown, plus the land feeling right for the species.
+            var mausStay = Set("set_mausoleum_stay", grass15, wheat1Ripe);
+            var shepStay = Set("set_bansheep_stay", wheat3Ripe, homeGrassland);
+            var wrabStay = Set("set_wrabbit_stay", berry2Ripe, water3);
+            var mothStay = Set("set_phantomoth_stay", night, bloom3Ripe);
+
+            Chain("chain_mausoleum", "mausoleum", mausAppear, mausVisit, mausStay, null);
+            Chain("chain_bansheep", "bansheep", shepAppear, shepVisit, shepStay, null);
+            Chain("chain_wrabbit", "wrabbit", wrabAppear, wrabVisit, wrabStay, null);
+            Chain("chain_phantomoth", "phantomoth", mothAppear, mothVisit, mothStay, null);
         }
 
         // ---- spirits (slice 03) -----------------------------------------------
@@ -175,24 +223,24 @@ namespace AnimalFarm.EditorTools
 
             MakeSpirit("mausoleum", "Mausoleum", "mausoleum_body",
                 "A mouse-shaped memory. It squeaks in past tense.",
-                "chain_mausoleum", favoredFood: "wheat", foodCount: 1, maxResidents: 3,
+                "chain_mausoleum", favoredFood: "wheat", maxResidents: 3,
                 activity: ActivityWindow.Always, hungerHours: 14f);
             MakeSpirit("bansheep", "Bansheep", "bansheep_body",
                 "It wails at shearing time. Nobody has ever sheared it.",
-                "chain_bansheep", favoredFood: "wheat", foodCount: 2, maxResidents: 2,
+                "chain_bansheep", favoredFood: "wheat", maxResidents: 2,
                 activity: ActivityWindow.Day, hungerHours: 12f);
             MakeSpirit("wrabbit", "Wrabbit", "wrabbit_body",
                 "Quick in life. Quicker now.",
-                "chain_wrabbit", favoredFood: "berry", foodCount: 2, maxResidents: 2,
+                "chain_wrabbit", favoredFood: "berry", maxResidents: 2,
                 activity: ActivityWindow.Always, hungerHours: 10f);
             MakeSpirit("phantomoth", "Phantomoth", "phantomoth_body",
                 "Drawn to lights it can no longer feel.",
-                "chain_phantomoth", favoredFood: "bloom", foodCount: 2, maxResidents: 2,
+                "chain_phantomoth", favoredFood: "bloom", maxResidents: 2,
                 activity: ActivityWindow.Night, hungerHours: 12f);
         }
 
         private static void MakeSpirit(string id, string displayName, string spriteName, string flavor,
-            string chainAsset, string favoredFood, int foodCount, int maxResidents,
+            string chainAsset, string favoredFood, int maxResidents,
             ActivityWindow activity, float hungerHours)
         {
             var def = GetOrCreate<SpiritSpeciesDefinition>($"{SpiritDir}/{displayName}.asset");
@@ -202,7 +250,6 @@ namespace AnimalFarm.EditorTools
             def.bodySprite = LoadSprite(spriteName);
             def.gateChain = AssetDatabase.LoadAssetAtPath<GateChain>($"{GateDir}/{chainAsset}.asset");
             def.favoredFoodId = favoredFood;
-            def.residencyFoodCount = foodCount;
             def.maxResidents = maxResidents;
             def.activity = activity;
             def.hungerHours = hungerHours;
@@ -240,6 +287,69 @@ namespace AnimalFarm.EditorTools
                     Personality(def, HabitatPreference.LightsAtNight, 0.8f, 0.7f, 0.8f, 1.0f, 820f, 0.5f, 0.07f);
                     break;
             }
+            ApplyStatBands(def);
+            ApplyAnimProfile(def);
+        }
+
+        /// <summary>
+        /// Muscle 03 verdict 8: per-species happy / neutral / sad-sick poses.
+        /// Same grammar for all (upright + bouncy vs drooped + dragging) with
+        /// species-dependent expression: bob style, tempo, squash, lean, pace.
+        /// </summary>
+        private static void ApplyAnimProfile(SpiritSpeciesDefinition def)
+        {
+            var p = new SpiritAnimProfile();
+            switch (def.id)
+            {
+                case "mausoleum": // skittish mouse: quick little hops; sad = huddled and tilted
+                    p.happy = MakePose(SpiritBobStyle.Bounce, 1.6f, 1.0f, 1.15f, 0f, 0.95f, 1.06f, 0f, 3f, 1f);
+                    p.neutral = MakePose(SpiritBobStyle.Float, 1.15f, 0.9f, 1f, 0f, 1f, 1f, 0f, 0f, 1f);
+                    p.sadSick = MakePose(SpiritBobStyle.Float, 0.7f, 0.5f, 0.7f, -0.1f, 1.1f, 0.82f, 12f, 0f, 0.55f);
+                    break;
+                case "bansheep": // placid sheep: slow sway; sad = head hung low and heavy
+                    p.happy = MakePose(SpiritBobStyle.Sway, 1.0f, 1.1f, 1.05f, 0f, 1f, 1.06f, 0f, 5f, 1f);
+                    p.neutral = MakePose(SpiritBobStyle.Float, 0.8f, 1.0f, 1f, 0f, 1f, 1f, 0f, 0f, 1f);
+                    p.sadSick = MakePose(SpiritBobStyle.Float, 0.4f, 0.6f, 0.6f, -0.1f, 1.08f, 0.88f, -8f, 0f, 0.6f);
+                    break;
+                case "wrabbit": // zoomy rabbit: big springy bounces; sad = ears-down flop
+                    p.happy = MakePose(SpiritBobStyle.Bounce, 1.9f, 1.4f, 1.3f, 0f, 0.96f, 1.08f, 0f, 0f, 1f);
+                    p.neutral = MakePose(SpiritBobStyle.Bounce, 1.0f, 0.6f, 1f, 0f, 1f, 1f, 0f, 0f, 1f);
+                    p.sadSick = MakePose(SpiritBobStyle.Float, 0.5f, 0.5f, 0.65f, -0.1f, 1.05f, 0.88f, 6f, 0f, 0.55f);
+                    break;
+                case "phantomoth": // moth: fluttery and wing-wide; sad = wings folded, low and still
+                    p.happy = MakePose(SpiritBobStyle.Flutter, 1.4f, 1.5f, 1.2f, 0.03f, 1.08f, 1f, 0f, 6f, 1f);
+                    p.neutral = MakePose(SpiritBobStyle.Flutter, 0.9f, 1.0f, 1f, 0f, 1f, 1f, 0f, 0f, 1f);
+                    p.sadSick = MakePose(SpiritBobStyle.Float, 0.35f, 0.5f, 0.6f, -0.15f, 0.95f, 0.88f, 0f, 0f, 0.5f);
+                    break;
+                case "wailpertinger": // lumbering cryptid: waddling gait; sad = slumped lean
+                    p.happy = MakePose(SpiritBobStyle.Waddle, 1.2f, 1.1f, 1.1f, 0f, 1f, 1.05f, 0f, 0f, 1f);
+                    p.neutral = MakePose(SpiritBobStyle.Float, 0.8f, 1.0f, 1f, 0f, 1f, 1f, 0f, 0f, 1f);
+                    p.sadSick = MakePose(SpiritBobStyle.Float, 0.4f, 0.5f, 0.6f, -0.1f, 1.06f, 0.88f, -10f, 0f, 0.55f);
+                    break;
+                case "mothmaus": // omen-squeaker: eerie sway, flutters when pleased; sad = drooped, ashen
+                    p.happy = MakePose(SpiritBobStyle.Flutter, 1.3f, 1.2f, 1.15f, 0.02f, 1.04f, 1.02f, 0f, 4f, 1f);
+                    p.neutral = MakePose(SpiritBobStyle.Sway, 0.9f, 0.9f, 1f, 0f, 1f, 1f, 0f, 0f, 1f);
+                    p.sadSick = MakePose(SpiritBobStyle.Float, 0.4f, 0.5f, 0.6f, -0.12f, 1f, 0.86f, 5f, 0f, 0.5f);
+                    break;
+            }
+            def.animProfile = p;
+        }
+
+        private static SpiritPose MakePose(SpiritBobStyle style, float freqMul, float ampMul, float speedMul,
+            float yOffset, float scaleX, float scaleY, float tilt, float sway, float saturation)
+        {
+            return new SpiritPose
+            {
+                bobStyle = style,
+                bobFreqMul = freqMul,
+                bobAmpMul = ampMul,
+                speedMul = speedMul,
+                bodyYOffset = yOffset,
+                bodyScale = new Vector2(scaleX, scaleY),
+                tiltDegrees = tilt,
+                swayDegrees = sway,
+                saturation = saturation
+            };
         }
 
         private static void Personality(SpiritSpeciesDefinition def, HabitatPreference habitat,
@@ -298,7 +408,6 @@ namespace AnimalFarm.EditorTools
             def.bodySprite = LoadSprite(spriteName);
             def.gateChain = null; // never appears wild — loom-only
             def.favoredFoodId = favoredFood;
-            def.residencyFoodCount = 1;
             def.maxResidents = 1;
             def.activity = ActivityWindow.Always;
             def.hungerHours = 16f;
@@ -337,13 +446,74 @@ namespace AnimalFarm.EditorTools
             EditorUtility.SetDirty(recipe);
         }
 
+        // ---- identity (muscle 05) -----------------------------------------------
+
+        /// <summary>
+        /// Species Nature bands: (min, max) per stat, individuals roll inside.
+        /// Species identity lives here - the mouse is quick and slight, the
+        /// sheep is a heavy lifter, the moths shine. Bands sit inside 1..10.
+        /// </summary>
+        private static void ApplyStatBands(SpiritSpeciesDefinition def)
+        {
+            switch (def.id)
+            {
+                case "mausoleum": // small, quick, modest shine
+                    Bands(def, 2, 5, 4, 8, 3, 7);
+                    break;
+                case "bansheep": // big and sturdy, slow on its feet
+                    Bands(def, 5, 9, 2, 5, 3, 7);
+                    break;
+                case "wrabbit": // all legs
+                    Bands(def, 3, 6, 6, 10, 2, 6);
+                    break;
+                case "phantomoth": // frail, graceful, glowing
+                    Bands(def, 2, 4, 5, 9, 5, 10);
+                    break;
+                case "wailpertinger": // woven: horn strength + rabbit legs
+                    Bands(def, 5, 9, 5, 9, 4, 8);
+                    break;
+                case "mothmaus": // woven: the shiniest thing in the dark
+                    Bands(def, 2, 5, 4, 8, 6, 10);
+                    break;
+            }
+        }
+
+        private static void Bands(SpiritSpeciesDefinition def,
+            int vMin, int vMax, int gMin, int gMax, int lMin, int lMax)
+        {
+            def.vigorBand = new Vector2Int(vMin, vMax);
+            def.graceBand = new Vector2Int(gMin, gMax);
+            def.gleamBand = new Vector2Int(lMin, lMax);
+        }
+
+        /// <summary>Trait pool assets, authored from the single in-code spec table.</summary>
+        private static void GenerateTraits()
+        {
+            EnsureFolder(TraitDir);
+            foreach (var spec in SpiritTraits.DefaultSpecs)
+            {
+                var trait = GetOrCreate<SpiritTraitDefinition>($"{TraitDir}/Trait_{spec.id}.asset");
+                SpiritTraits.Apply(spec, trait);
+                EditorUtility.SetDirty(trait);
+            }
+        }
+
+        public static SpiritTraitDefinition[] LoadAllTraits()
+        {
+            var specs = SpiritTraits.DefaultSpecs;
+            var result = new SpiritTraitDefinition[specs.Length];
+            for (int i = 0; i < specs.Length; i++)
+                result[i] = AssetDatabase.LoadAssetAtPath<SpiritTraitDefinition>($"{TraitDir}/Trait_{specs[i].id}.asset");
+            return result;
+        }
+
         public static WeaveRecipe[] LoadAllRecipes() => new[]
         {
             AssetDatabase.LoadAssetAtPath<WeaveRecipe>($"{SpiritDir}/recipe_wailpertinger.asset"),
             AssetDatabase.LoadAssetAtPath<WeaveRecipe>($"{SpiritDir}/recipe_mothmaus.asset")
         };
 
-        public static SpiritSpeciesDefinition[] LoadAllSpiritSpecies() => new[]
+        public static SpiritSpeciesDefinition[] LoadAllSpiritSpecies() => WithFrontierSpecies(new[]
         {
             AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/Mausoleum.asset"),
             AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/Bansheep.asset"),
@@ -351,7 +521,7 @@ namespace AnimalFarm.EditorTools
             AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/Phantomoth.asset"),
             AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/Wailpertinger.asset"),
             AssetDatabase.LoadAssetAtPath<SpiritSpeciesDefinition>($"{SpiritDir}/Mothmaus.asset")
-        };
+        });
 
         private static ConditionAsset Cond<T>(string name, params (string field, object value)[] fields)
             where T : ConditionAsset
@@ -382,13 +552,13 @@ namespace AnimalFarm.EditorTools
             EditorUtility.SetDirty(chain);
         }
 
-        public static GateChain[] LoadAllChains() => new[]
+        public static GateChain[] LoadAllChains() => WithFrontierChains(new[]
         {
             AssetDatabase.LoadAssetAtPath<GateChain>($"{GateDir}/chain_mausoleum.asset"),
             AssetDatabase.LoadAssetAtPath<GateChain>($"{GateDir}/chain_bansheep.asset"),
             AssetDatabase.LoadAssetAtPath<GateChain>($"{GateDir}/chain_wrabbit.asset"),
             AssetDatabase.LoadAssetAtPath<GateChain>($"{GateDir}/chain_phantomoth.asset")
-        };
+        });
 
         public static Tile LoadTile(string name) =>
             AssetDatabase.LoadAssetAtPath<Tile>($"{TileDir}/{name}.asset");

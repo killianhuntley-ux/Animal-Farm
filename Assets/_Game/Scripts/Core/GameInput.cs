@@ -32,10 +32,12 @@ namespace AnimalFarm.Core
         public event Action ToolbeltPressed; // stays live while gameplay is blocked (like Pause/Console)
         public event Action InspectPressed;
         public event Action BuildPressed;
+        public event Action RestPressed; // sit & rest toggle (muscle 01)
+        public event Action RidePressed; // mount / dismount toggle (muscle 08 pouty mount)
 
         public InputActionAsset Actions => actions;
 
-        private InputAction _move, _sprint, _zoom, _interact, _fastForward, _pause, _console, _useTool, _cycleTool, _toolbelt, _inspect, _build;
+        private InputAction _move, _sprint, _zoom, _interact, _fastForward, _pause, _console, _useTool, _cycleTool, _toolbelt, _inspect, _build, _rest, _ride;
 
         private void Awake()
         {
@@ -55,6 +57,8 @@ namespace AnimalFarm.Core
             _toolbelt = map.FindAction("Toolbelt", true);
             _inspect = map.FindAction("Inspect", true);
             _build = map.FindAction("Build", true);
+            _rest = map.FindAction("Rest", true);
+            _ride = map.FindAction("Ride", true);
 
             _interact.performed += _ => InteractPressed?.Invoke();
             _fastForward.performed += _ => FastForwardPressed?.Invoke();
@@ -65,6 +69,8 @@ namespace AnimalFarm.Core
             _toolbelt.performed += _ => ToolbeltPressed?.Invoke();
             _inspect.performed += _ => InspectPressed?.Invoke();
             _build.performed += _ => BuildPressed?.Invoke();
+            _rest.performed += _ => RestPressed?.Invoke();
+            _ride.performed += _ => RidePressed?.Invoke();
         }
 
         private void OnEnable() => actions.Enable();
@@ -78,6 +84,22 @@ namespace AnimalFarm.Core
             UseToolHeld = _useTool.IsPressed();
         }
 
+        /// <summary>
+        /// True on the frame any control bound to Interact (honours rebinds) was
+        /// pressed. Works while gameplay is blocked (the action is disabled then),
+        /// so keyboard/gamepad menus can confirm with the same button.
+        /// </summary>
+        public bool InteractPressedThisFrame()
+        {
+            if (_interact == null) return false;
+            foreach (var control in _interact.controls)
+            {
+                if (control is UnityEngine.InputSystem.Controls.ButtonControl button && button.wasPressedThisFrame)
+                    return true;
+            }
+            return false;
+        }
+
         /// <summary>Blocks gameplay actions (movement etc.) while menus/console are up. Pause/Console stay live.</summary>
         public void SetGameplayBlocked(bool blocked)
         {
@@ -85,13 +107,13 @@ namespace AnimalFarm.Core
             {
                 _move.Disable(); _sprint.Disable(); _zoom.Disable();
                 _interact.Disable(); _fastForward.Disable();
-                _useTool.Disable(); _cycleTool.Disable(); _inspect.Disable(); _build.Disable();
+                _useTool.Disable(); _cycleTool.Disable(); _inspect.Disable(); _build.Disable(); _rest.Disable(); _ride.Disable();
             }
             else
             {
                 _move.Enable(); _sprint.Enable(); _zoom.Enable();
                 _interact.Enable(); _fastForward.Enable();
-                _useTool.Enable(); _cycleTool.Enable(); _inspect.Enable(); _build.Enable();
+                _useTool.Enable(); _cycleTool.Enable(); _inspect.Enable(); _build.Enable(); _rest.Enable(); _ride.Enable();
             }
         }
 

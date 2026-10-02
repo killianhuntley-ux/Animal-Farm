@@ -45,7 +45,7 @@ namespace AnimalFarm.World
         private float[] _scores;
         private float _timer;
         private readonly List<Rect> _rectScratch = new List<Rect>();
-        private readonly int[] _countScratch = new int[5]; // one slot per Surface
+        private readonly int[] _countScratch = new int[TerrainGrid.SurfaceTypeCount]; // one slot per Surface
 
         public int BaseCount => _biomes != null ? _biomes.Length : 0;
 
@@ -56,6 +56,28 @@ namespace AnimalFarm.World
         public float GetBiomeScore(int baseId) =>
             _scores != null && baseId >= 0 && baseId < _scores.Length
                 ? _scores[baseId] : 0f;
+
+        // ---- console override (testing affinity / rain without sculpting) ----
+
+        private readonly Dictionary<int, BiomeType> _forced = new Dictionary<int, BiomeType>();
+
+        /// <summary>True while a console override pins this base's biome.</summary>
+        public bool IsForced(int baseId) => _forced.ContainsKey(baseId);
+
+        /// <summary>Console: pin a base to a biome (score 100) so gates and spirit
+        /// affinity react immediately. Re-census happens at once.</summary>
+        public void Debug_ForceBiome(int baseId, BiomeType biome)
+        {
+            _forced[baseId] = biome;
+            EvaluateAll();
+        }
+
+        /// <summary>Console: drop the override on one base (-1 = every base).</summary>
+        public void Debug_ClearForcedBiome(int baseId)
+        {
+            if (baseId < 0) _forced.Clear(); else _forced.Remove(baseId);
+            EvaluateAll();
+        }
 
         private void Awake()
         {
@@ -96,6 +118,7 @@ namespace AnimalFarm.World
             for (int baseId = 0; baseId < _biomes.Length; baseId++)
             {
                 CensusBase(baseId, grid, parcels, out BiomeType biome, out float score);
+                if (_forced.TryGetValue(baseId, out BiomeType forcedBiome)) { biome = forcedBiome; score = 100f; }
 
                 if (biome != _biomes[baseId])
                 {
@@ -142,7 +165,8 @@ namespace AnimalFarm.World
             if (total == 0) { biome = BiomeType.Barren; score = 0f; return; }
 
             float grassPct = _countScratch[(int)Surface.Grass] * 100f / total;
-            float waterPct = _countScratch[(int)Surface.Water] * 100f / total;
+            // Swamp land = standing water AND rich mud (mud is wet ground: it counts like water).
+            float waterPct = (_countScratch[(int)Surface.Water] + _countScratch[(int)Surface.Mud]) * 100f / total;
             float sandPct = _countScratch[(int)Surface.Sand] * 100f / total;
 
             if (sandPct >= DesertSandPercent)
@@ -168,7 +192,8 @@ namespace AnimalFarm.World
         }
 
         /// <summary>Plants inside this base (rects already in _rectScratch)
-        /// whose cell touches water on a 4-neighbour -- the swamp's lifeblood.</summary>
+        /// growing IN water or rich mud, or whose cell touches water on a
+        /// 4-neighbour -- the swamp's lifeblood.</summary>
         private int CountWetPlants(TerrainGrid grid)
         {
             var plantManager = PlantManager.Instance;
@@ -186,6 +211,11 @@ namespace AnimalFarm.World
                 for (int r = 0; r < _rectScratch.Count && !inBase; r++)
                     inBase = _rectScratch[r].Contains(world);
                 if (!inBase) continue;
+
+                // Water species (reeds, glowcap lilies) grow IN the pond: always swamp life.
+                if (plant.Species != null && plant.Species.requiredSurface == Surface.Water) { wet++; continue; }
+                // Anything rooted in rich mud is swamp life too.
+                if (grid.GetSurface(plant.Cell) == Surface.Mud) { wet++; continue; }
 
                 var c = plant.Cell;
                 if (grid.GetSurface(new Vector2Int(c.x - 1, c.y)) == Surface.Water ||

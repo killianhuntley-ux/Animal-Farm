@@ -137,6 +137,7 @@ namespace AnimalFarm.EditorTools
             AssignPrivateField(spiritManager, "knownSpecies", spiritSpecies);
             AssignPrivateField(spiritManager, "spriteMaterial", litMat);
             AssignPrivateField(spiritManager, "recipes", ContentBootstrapper.LoadAllRecipes());
+            AssignPrivateField(spiritManager, "traitPool", ContentBootstrapper.LoadAllTraits());
             var homeManager = worldSystems.AddComponent<HomeManager>();
             AssignPrivateField(homeManager, "spriteMaterial", litMat);
             var headstones = worldSystems.AddComponent<HeadstoneRegistry>();
@@ -304,33 +305,21 @@ namespace AnimalFarm.EditorTools
             tgSr.sortingOrder = -950;
             if (litMat) tgSr.sharedMaterial = litMat;
 
-            void PlaceStall(Vector2 pos, string label, Color tint)
-            {
-                var stall = new GameObject("Stall");
-                stall.transform.SetParent(town.transform);
-                stall.transform.position = pos;
-                var ssr = stall.AddComponent<SpriteRenderer>();
-                ssr.sprite = Sprite(ArtDir + "notice_board.png");
-                ssr.color = tint;
-                ssr.sortingOrder = 0;
-                if (litMat) ssr.sharedMaterial = litMat;
-                stall.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
-                AnimalFarm.UI.WorldLabel.Attach(stall, label, -0.9f);
-            }
-            // Vendor is REAL now (slice 09 economy); Ferryman still a placeholder.
+            // Vendor is REAL now (slice 09 economy); Land Office below.
             var vendorGo = new GameObject("VendorStall");
             vendorGo.transform.SetParent(town.transform);
             vendorGo.transform.position = new Vector3(29f, 4.5f, 0f);
             var vendor = vendorGo.AddComponent<VendorStall>();
             AssignPrivateField(vendor, "stallSprite", Sprite(ArtDir + "notice_board.png"));
             AssignPrivateField(vendor, "spriteMaterial", litMat);
-            // Ferryman is REAL now: land deeds via the parcel overview.
-            var ferryGo = new GameObject("FerrymanStall");
-            ferryGo.transform.SetParent(town.transform);
-            ferryGo.transform.position = new Vector3(29f, -4.5f, 0f);
-            var ferry = ferryGo.AddComponent<FerrymanStall>();
-            AssignPrivateField(ferry, "stallSprite", Sprite(ArtDir + "notice_board.png"));
-            AssignPrivateField(ferry, "spriteMaterial", litMat);
+            // Land Office (The Registrar): land deeds via the parcel overview. Charon
+            // appears ONLY at the Styx crossing (owner rule) -- never as a vendor.
+            var officeStallGo = new GameObject("LandOfficeStall");
+            officeStallGo.transform.SetParent(town.transform);
+            officeStallGo.transform.position = new Vector3(29f, -4.5f, 0f);
+            var landOffice = officeStallGo.AddComponent<LandOfficeStall>();
+            AssignPrivateField(landOffice, "stallSprite", Sprite(ArtDir + "notice_board.png"));
+            AssignPrivateField(landOffice, "spriteMaterial", litMat);
 
             // Holding Office (slice 07): where repossessed spirits await fees.
             // INSIDE the town walls (owner rule) -- the old 42,5 sat outside.
@@ -360,8 +349,9 @@ namespace AnimalFarm.EditorTools
             }
 
             // --- Skins ------------------------------------------------------
-            var skinA = MakeSkin("Skin_Default", ArtDir + "shepherd_body.png", ArtDir + "shepherd_head.png");
-            var skinB = MakeSkin("Skin_Alt", ArtDir + "shepherd_body_alt.png", ArtDir + "shepherd_head_alt.png");
+            // Side + up + down poses per skin (muscle 01 four-direction facing).
+            var skinA = MakeSkin("Skin_Default", ArtDir + "shepherd_body", ArtDir + "shepherd_head");
+            var skinB = MakeSkin("Skin_Alt", ArtDir + "shepherd_body_alt", ArtDir + "shepherd_head_alt");
 
             // --- Shepherd ---------------------------------------------------
             var shepherd = new GameObject("Shepherd") { tag = "Player" };
@@ -496,7 +486,10 @@ namespace AnimalFarm.EditorTools
             return go;
         }
 
-        private static SkinDefinition MakeSkin(string assetName, string bodyPath, string headPath)
+        /// <summary>Builds/updates a skin asset. Paths are the sprite base paths
+        /// WITHOUT extension: {base}.png is the side pose, {base}_up.png and
+        /// {base}_down.png the directional poses.</summary>
+        private static SkinDefinition MakeSkin(string assetName, string bodyBase, string headBase)
         {
             string path = "Assets/_Game/Art/" + assetName + ".asset";
             var skin = AssetDatabase.LoadAssetAtPath<SkinDefinition>(path);
@@ -505,8 +498,12 @@ namespace AnimalFarm.EditorTools
                 skin = ScriptableObject.CreateInstance<SkinDefinition>();
                 AssetDatabase.CreateAsset(skin, path);
             }
-            skin.body = Sprite(bodyPath);
-            skin.head = Sprite(headPath);
+            skin.body = Sprite(bodyBase + ".png");
+            skin.head = Sprite(headBase + ".png");
+            skin.bodyUp = Sprite(bodyBase + "_up.png");
+            skin.headUp = Sprite(headBase + "_up.png");
+            skin.bodyDown = Sprite(bodyBase + "_down.png");
+            skin.headDown = Sprite(headBase + "_down.png");
             EditorUtility.SetDirty(skin);
             return skin;
         }

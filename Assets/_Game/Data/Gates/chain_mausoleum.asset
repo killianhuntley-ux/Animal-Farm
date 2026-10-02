@@ -15,5 +15,5 @@ MonoBehaviour:
   chainId: mausoleum
   appear: {fileID: 11400000, guid: 0e14744f6cfd9ef4d8c36b4dd48bf1b3, type: 2}
   visit: {fileID: 11400000, guid: 22698fb26cdd1854e969e711d950de6c, type: 2}
-  resident: {fileID: 11400000, guid: 22698fb26cdd1854e969e711d950de6c, type: 2}
+  resident: {fileID: 11400000, guid: b5a5669bfdf305c46831eb6e65fae0fe, type: 2}
   fulfil: {fileID: 0}

@@ -24,6 +24,18 @@ namespace AnimalFarm.Spirits
         public int AscendedDay;
         public float DaysAmongUs;
 
+        // Muscle 04 (memorial garden). "Placed": false while the stone still
+        // waits where the crossing dropped it; true once the player chose a
+        // resting place. The garden only grows around placed stones, counted
+        // from PlacedHours (GameClock total hours) - moving a placed stone
+        // keeps its age (its roots travel with it).
+        public bool Placed;
+        public float PlacedHours;
+        /// <summary>Clock hour (0..24) the crossing happened at; -1 = unknown.</summary>
+        public float CrossedHour = -1f;
+        /// <summary>Neighbours who gathered to watch the crossing.</summary>
+        public int Witnesses;
+
         private int _epitaphIndex;
         private Vector3 _baseScale;
 
@@ -45,6 +57,25 @@ namespace AnimalFarm.Spirits
 
             // OnEnable ran before Init could set SpeciesId; register here too.
             WorldObjectRegistry.Register("headstone_" + SpeciesId);
+        }
+
+        /// <summary>Restore path: set the placed state without touching the clock.</summary>
+        public void SetPlacement(bool placed, float placedHours)
+        {
+            Placed = placed;
+            PlacedHours = placedHours;
+        }
+
+        /// <summary>
+        /// The player settled the stone on a resting place. The first
+        /// placement starts the garden's clock; later moves keep it.
+        /// </summary>
+        public void MarkPlaced()
+        {
+            if (Placed) return;
+            Placed = true;
+            var clock = AnimalFarm.Core.GameClock.Instance;
+            PlacedHours = clock != null ? clock.TotalHours : 0f;
         }
 
         // ---- IInteractable ----------------------------------------------------
@@ -106,6 +137,7 @@ namespace AnimalFarm.Spirits
                 {
                     if (stone == null) return;
                     stone.transform.position = world;
+                    stone.MarkPlaced();
                     AnimalFarm.Core.Bleeps.Play(AnimalFarm.Core.BleepKind.Build, 0.6f);
                 });
         }

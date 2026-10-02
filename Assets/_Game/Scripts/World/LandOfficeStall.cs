@@ -6,12 +6,13 @@ using UnityEngine;
 namespace AnimalFarm.World
 {
     /// <summary>
-    /// The Ferryman's land office stall. A fixed world fixture, like the
+    /// The Registrar's land office stall (an underworld land clerk; Charon
+    /// appears ONLY at the Styx crossing -- owner rule). A fixed world fixture, like the
     /// VendorStall: walk up and press Interact (or click "Land deeds") to open
     /// the LandOfficeUI modal -- the parcel overview where land expansions are
-    /// bought for coins (obols, the ferryman's toll).
+    /// bought for coins (obols).
     /// </summary>
-    public class FerrymanStall : MonoBehaviour, IInteractable, ISelectable
+    public class LandOfficeStall : MonoBehaviour, IInteractable, ISelectable
     {
         private const float FocusScale = 1.06f;
 
@@ -33,7 +34,7 @@ namespace AnimalFarm.World
             col.isTrigger = true;
             col.size = new Vector2(1.6f, 1.6f);
 
-            WorldLabel.Attach(gameObject, "The Ferryman", -1.0f);
+            WorldLabel.Attach(gameObject, "The Registrar", -1.0f);
         }
 
         // ------------------------------------------------------- IInteractable
@@ -54,7 +55,7 @@ namespace AnimalFarm.World
 
         // ------------------------------------------------------- ISelectable
 
-        public string SelectableTitle => "The Ferryman";
+        public string SelectableTitle => "The Registrar";
 
         public void GetSelectActions(List<SelectAction> into)
         {

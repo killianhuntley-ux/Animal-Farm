@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f12ae884f7b736d4dbd9540918af97d1, type: 3}
+  m_Name: Trait_showoff
+  m_EditorClassIdentifier: 
+  id: showoff
+  displayName: Show-off
+  flavor: Practises its best hop wherever you happen to be looking.
+  rollWeight: 1
+  conflictsWith: []
+  napMul: 0.7
+  stretchMul: 1.3
+  hopMul: 1.8
+  leafChaseMul: 1
+  trainingAppetite: 1.1
+  vigorAppetite: 1
+  graceAppetite: 1
+  gleamAppetite: 1.9
+  baitAppetite: 1

@@ -22,7 +22,7 @@ namespace AnimalFarm.Spirits
         public string givenName;
         public float spirit;
         public float hunger01;
-        public int fedCount;
+        public int fedCount;            // DEPRECATED (muscle 11): read for old saves, ignored
         public float x, y;
         public int timesFed;
         public int taskProgress;
@@ -32,6 +32,12 @@ namespace AnimalFarm.Spirits
         public int compWins;
         public int vigor, grace, gleam;
         public float lastFed;
+        // muscle 05: traits (comma-joined ids; empty on old saves -> rolled on load)
+        // and fractional training progress toward the next stat point
+        public string traitIds;
+        public float xpVigor, xpGrace, xpGleam;
+        // muscle 11: game-hours a visitor has spent with its Stay gate met (0 on old saves)
+        public float stayHours;
     }
 
     /// <summary>
@@ -40,7 +46,7 @@ namespace AnimalFarm.Spirits
     /// The only collider is a trigger circle so the InteractionSensor's
     /// OverlapCircle can find them.
     /// </summary>
-    public class SpiritAgent : MonoBehaviour, IInteractable, ISelectable
+    public partial class SpiritAgent : MonoBehaviour, IInteractable, ISelectable
     {
         // ---- tuning constants ------------------------------------------------
 
@@ -72,6 +78,8 @@ namespace AnimalFarm.Spirits
         private const float TendDistance = 2.6f;         // click-menu feed/soothe reach
         private const float CeremonyDriftSpeed = 1.5f;
         private const float RadiantPulseSeconds = 1.5f;
+        private const float VisitorGiftCap = 95f;         // a visitor this content politely declines more gifts
+        private const int WantLand = 5;                 // mirrors AnimalFarm.UI.WantKind.Land (visitor wants the LAND changed)
 
         // muscle 03: personality tuning
         private const float MoodHappyThreshold = 70f;    // Spirit >= this = happy band
@@ -106,6 +114,7 @@ namespace AnimalFarm.Spirits
         /// <summary>0 = just fed, 1 = starving.</summary>
         public float Hunger01 => _hunger01;
         public bool IsSleeping => _isSleeping;
+        /// <summary>DEPRECATED (muscle 11): feeding no longer converts a visitor; kept only so old saves load.</summary>
         public int FedCount => _fedCount;
 
         /// <summary>True while this resident trails the shepherd.</summary>
@@ -155,7 +164,7 @@ namespace AnimalFarm.Spirits
 
         /// <summary>True when free for a pair interaction (SpiritSocialManager).</summary>
         public bool IsSocialIdle =>
-            CanActPersonality && !_following
+            CanActPersonality && !_following && !_restActive
             && _quirk == SpiritQuirks.Kind.None && _flinchTimer < 0f;
 
         /// <summary>Body renderer; the manager assigns the shared sprite material after Init.</summary>
@@ -223,6 +232,81 @@ namespace AnimalFarm.Spirits
             SpiritVoice.Play(_species, VoiceIntent.Startle, 0.9f);
         }
 
+        // ---- rest gathering (muscle 01: the shepherd sits and rests) ---------
+
+        private bool _restActive;
+        private bool _restSettled;
+        private Vector3 _restPoint;
+
+        /// <summary>True once a gathered spirit has reached its settle point.</summary>
+        public bool IsRestSettled => _restActive && _restSettled;
+
+        /// <summary>True while this spirit is gathering/settled around a resting shepherd.</summary>
+        public bool IsRestGathering => _restActive;
+
+        /// <summary>
+        /// Called by ShepherdRest: drift to <paramref name="point"/> and settle
+        /// there. Refused for spirits that cannot act now (asleep, ceremony,
+        /// runaway, silhouette) and for followers (they already trail you).
+        /// </summary>
+        public bool BeginRestGather(Vector3 point)
+        {
+            if (!CanActPersonality || _following || _state == SpiritState.Runaway) return false;
+            if (_quirk != SpiritQuirks.Kind.None) EndQuirk();
+            _restActive = true;
+            _trainTarget = null; // resting beats a pending walk to a training building
+            _restSettled = false;
+            _restPoint = new Vector3(point.x, point.y, 0f);
+            _hasTarget = false;
+            return true;
+        }
+
+        /// <summary>The shepherd stood up (or this spirit stopped qualifying): wander again.</summary>
+        public void EndRestGather()
+        {
+            if (!_restActive) return;
+            _restActive = false;
+            _restSettled = false;
+            _hasTarget = false;
+            _idleTimer = Random.Range(1f, 3f);
+        }
+
+        /// <summary>Slow comfort from resting nearby: raises Spirit, never past <paramref name="cap"/>.</summary>
+        public void RestComfort(float amount, float cap)
+        {
+            if (amount <= 0f || _spirit >= cap) return;
+            _spirit = Mathf.Min(cap, _spirit + amount * GroundGainMul);
+        }
+
+        /// <summary>Gathering drift: amble to the settle point, then stay put.</summary>
+        private void TickRestSettle()
+        {
+            if (_restSettled) return;
+            transform.position = Vector3.MoveTowards(
+                transform.position, _restPoint, _species.wanderSpeed * 0.8f * Time.deltaTime);
+            if ((transform.position - _restPoint).sqrMagnitude <= ArriveDistance * ArriveDistance)
+                _restSettled = true;
+        }
+
+        /// <summary>
+        /// Nervous glance (muscle 07, the Repo-man walks by): a quick flinch and
+        /// a quiet squeak, no Spirit change. Skipped while asleep or mid-flinch.
+        /// </summary>
+        public void Nervous()
+        {
+            if (_state != SpiritState.Resident && _state != SpiritState.Visitor) return;
+            if (_isSleeping || _flinchTimer >= 0f) return;
+
+            _flinchTimer = 0f;
+            SpiritVoice.Play(_species, VoiceIntent.Startle, 0.35f);
+        }
+
+        /// <summary>Console cheat: a Resident bolts for the border as if neglected.</summary>
+        public void Debug_ForceRunaway()
+        {
+            if (_state == SpiritState.Resident) BecomeRunaway();
+        }
+
         public void Debug_SetSpirit(float v) => _spirit = Mathf.Clamp(v, 0f, 100f);
         public void Debug_CompleteTask() => CompleteTask();
 
@@ -258,7 +342,7 @@ namespace AnimalFarm.Spirits
         private string _givenName = "";
         private float _spirit = 60f;
         private float _hunger01;
-        private int _fedCount;
+        private int _fedCount;              // DEPRECATED: loaded/saved for old saves, never read for gameplay
         private bool _isSleeping;
 
         private float _lastFedTotalHours;
@@ -305,6 +389,7 @@ namespace AnimalFarm.Spirits
         private float _hopTimer = -1f;
         private bool _despawning;
         private float _despawnTimer;
+        private float _despawnFadeSeconds = DespawnFadeSeconds; // Hard-No drift-off stretches it (SpiritAgent.Stay.cs)
         private Vector3 _baseScale = Vector3.one;
         private bool _focused;
 
@@ -313,7 +398,7 @@ namespace AnimalFarm.Spirits
         // ISaveable only if truly needed).
         private AnimalFarm.UI.WantBubble _bubble;
         private const int WantFood = 0, WantWater = 1, WantLonely = 2, WantHome = 3; // mirror AnimalFarm.UI.WantKind
-        private readonly bool[] _wantActive = new bool[4];
+        private readonly bool[] _wantActive = new bool[6]; // 0-3 mirror WantKind, 5 = Land (4 = Wrong, shown directly)
         private float _wantCheckTimer;
         private float _wantProximityReadyAt;   // unscaled
         private bool _playerInBubbleRange;
@@ -389,12 +474,11 @@ namespace AnimalFarm.Spirits
             SpiritSocialManager.Ensure();
         }
 
-        /// <summary>Rolls the per-individual stats (2-9 each), once per spawn.</summary>
+        /// <summary>Rolls the per-individual identity once per spawn: stats inside
+        /// the species bands + 1-2 traits (muscle 05; see SpiritAgent.Identity.cs).</summary>
         private void RollStats()
         {
-            _vigor = Random.Range(2, 10);
-            _grace = Random.Range(2, 10);
-            _gleam = Random.Range(2, 10);
+            RollIdentity();
         }
 
         /// <summary>Restores per-individual fields from a save record (after Init;
@@ -411,6 +495,7 @@ namespace AnimalFarm.Spirits
             _residentSinceTotalHours = rec.residentSince;
             _compEntries = Mathf.Max(0, rec.compEntries);
             _compWins = Mathf.Max(0, rec.compWins);
+            LoadStayHours(rec.stayHours); // muscle 11 (0 on old saves)
 
             // Stats floor: a pre-stats save has vigor 0 -- reroll so it stays
             // valid, and rebuild the fed-timestamp it also lacks from hunger01.
@@ -427,6 +512,7 @@ namespace AnimalFarm.Spirits
                 _grace = rec.grace;
                 _gleam = rec.gleam;
             }
+            ApplyIdentityRecord(rec); // muscle 05: clamp stats into band, load traits + training progress
 
             if (!string.IsNullOrEmpty(rec.givenName)) SetGivenName(rec.givenName);
         }
@@ -457,7 +543,12 @@ namespace AnimalFarm.Spirits
             vigor = _vigor,
             grace = _grace,
             gleam = _gleam,
-            lastFed = _lastFedTotalHours
+            lastFed = _lastFedTotalHours,
+            traitIds = SpiritTraits.Join(_traits),
+            xpVigor = _xp[0],
+            xpGrace = _xp[1],
+            xpGleam = _xp[2],
+            stayHours = _stayMetHours
         };
 
         // ---- per-frame -------------------------------------------------------
@@ -482,12 +573,14 @@ namespace AnimalFarm.Spirits
 
             TickSleep();
             TickNeeds();
+            TickBiome(); // muscle 02: ground affinity mood + rain reactions (SpiritAgent.Biome.cs)
             TickStateGates();
+            TickStay(); // muscle 11: a visitor decides to stay on its own (SpiritAgent.Stay.cs)
             TickHerding();
             TickHomeAndTask();
             TickPresence();
             TickWantBubble();
-            if (!TickQuirk())
+            if (!TickShyness() && !TickStayDecision() && !TickQuirk())
             {
                 if (_following && _state == SpiritState.Resident) TickFollow();
                 else TickWander();
@@ -504,14 +597,16 @@ namespace AnimalFarm.Spirits
         private void TickDespawnFade()
         {
             _despawnTimer += Time.deltaTime;
-            float fade = Mathf.Clamp01(1f - _despawnTimer / DespawnFadeSeconds);
+            float fade = Mathf.Clamp01(1f - _despawnTimer / _despawnFadeSeconds);
+            if (_driftDir.sqrMagnitude > 0f)
+                transform.position += _driftDir * (DriftSpeed * Time.deltaTime); // Hard-No ground: drift off while fading
             if (Renderer != null)
             {
                 var c = Renderer.color;
                 c.a = SilhouetteAlpha * fade;
                 Renderer.color = c;
             }
-            if (_despawnTimer >= DespawnFadeSeconds)
+            if (_despawnTimer >= _despawnFadeSeconds)
             {
                 if (SpiritManager.Instance != null) SpiritManager.Instance.Despawn(this);
                 else Destroy(gameObject);
@@ -597,6 +692,12 @@ namespace AnimalFarm.Spirits
             _stateCheckTimer -= Time.deltaTime;
             if (_stateCheckTimer > 0f) return;
             _stateCheckTimer = StateCheckInterval;
+            if (_debugPinned && _state == SpiritState.Silhouette)
+            {
+                // Console-forced silhouette: gates are ignored, but Hard No ground still says no.
+                if (StandsOnHardNoGround()) BeginDriftAway();
+                return;
+            }
 
             var evaluator = RequirementEvaluator.Instance;
             if (evaluator == null || _species.gateChain == null) return;
@@ -605,9 +706,16 @@ namespace AnimalFarm.Spirits
             switch (_state)
             {
                 case SpiritState.Silhouette:
-                    if (evaluator.IsGateOpen(chainId, Gate.Visit))
+                    // Muscle 02/11: gates stay authoritative; a Hard No biome under it only
+                    // ever says no (it never visits there: it drifts off and fades, and the
+                    // manager respawns a silhouette on kinder ground).
+                    if (StandsOnHardNoGround())
                     {
-                        BecomeVisitor();
+                        BeginDriftAway();
+                    }
+                    else if (evaluator.IsGateOpen(chainId, Gate.Visit))
+                    {
+                        if (RevisitCooldownOver()) BecomeVisitor(); // a visitor that wandered off waits a while
                     }
                     else if (!evaluator.IsGateOpen(chainId, Gate.Appear))
                     {
@@ -617,6 +725,15 @@ namespace AnimalFarm.Spirits
                     break;
 
                 case SpiritState.Visitor:
+                    if (_stayPhase != StayPhase.None) break; // it has decided to stay: it sees that through
+
+                    // Muscle 11: a visitor never lingers on ground its species Hard No's.
+                    if (StandsOnHardNoGround())
+                    {
+                        BeginDriftAway();
+                        break;
+                    }
+
                     if (!evaluator.IsGateOpen(chainId, Gate.Visit))
                     {
                         if (!_returningToBorder)
@@ -627,12 +744,20 @@ namespace AnimalFarm.Spirits
                             _idleTimer = 0f;
                         }
                     }
-                    else
+                    else if (!_stayLeaving)
                     {
                         _returningToBorder = false; // gate reopened mid-retreat
                     }
                     break;
             }
+        }
+
+        /// <summary>False while a visitor that wandered off (Stay gate lapsed) is still cooling down.</summary>
+        private bool RevisitCooldownOver()
+        {
+            if (_revisitNotBeforeHours < 0f) return true;
+            var clock = GameClock.Instance;
+            return clock == null || clock.TotalHours >= _revisitNotBeforeHours;
         }
 
         private void TickWander()
@@ -642,6 +767,12 @@ namespace AnimalFarm.Spirits
             // Runaways flee to the border (or finish a herding dash), then
             // just wait in place until tagged, settled, or recovered.
             if (_state == SpiritState.Runaway && !_hasTarget) return;
+
+            // Resting shepherd (muscle 01): gather and settle instead of wandering.
+            if (_restActive) { TickRestSettle(); return; }
+
+            // Rain (muscle 02): a sheltering spirit hurries to cover and waits there.
+            if (TickRainShelter()) return;
 
             if (!_hasTarget)
             {
@@ -655,6 +786,7 @@ namespace AnimalFarm.Spirits
                     if (TryStartQuirk()) return;
                     if (TryMoodDriftTarget(out var drift)) { _wanderTarget = drift; _hasTarget = true; }
                     else if (TryHabitatTarget(out var hangout)) { _wanderTarget = hangout; _hasTarget = true; }
+                    else if (TryTrainingTarget(out var gym)) { _wanderTarget = gym; _hasTarget = true; }
                 }
                 if (!_hasTarget)
                 {
@@ -667,7 +799,7 @@ namespace AnimalFarm.Spirits
             if (_state == SpiritState.Visitor || _state == SpiritState.Resident)
             {
                 // Posture pace: low mood drags; nocturnal species perk up after dark.
-                if (MoodBand == SpiritMoodBand.Low) speed *= LowMoodSpeedMul;
+                speed *= CurrentPose.speedMul; // per-species happy/neutral/sad pace (muscle 03)
                 if (_species.activity == ActivityWindow.Night
                     && GameClock.Instance != null && GameClock.Instance.IsNight)
                     speed *= NocturnalNightSpeedMul;
@@ -721,7 +853,7 @@ namespace AnimalFarm.Spirits
 
             if (!HasHome)
             {
-                var home = Home.FindFree(_species.id, transform.position);
+                var home = FindFreeHomeHere(); // muscle 02: skips homes on Hard No ground
                 if (home != null && home.TryClaim(this))
                 {
                     _home = home;
@@ -801,7 +933,7 @@ namespace AnimalFarm.Spirits
             float dist = to.magnitude;
             if (dist <= FollowStopDistance) return;
 
-            float speed = Mathf.Max(_species.wanderSpeed * 2.2f, 3.9f);
+            float speed = Mathf.Max(_species.wanderSpeed * 2.2f, 3.9f) * RoadSpeedMul; // dark road stretches slow escorts
             float step = Mathf.Min(speed * Time.deltaTime, dist - FollowStopDistance);
             transform.position += to / dist * step;
         }
@@ -812,6 +944,7 @@ namespace AnimalFarm.Spirits
 
             var mood = MoodBand;
             bool expressive = _state == SpiritState.Visitor || _state == SpiritState.Resident;
+            var pose = CurrentPose; // per-species happy / neutral / sad-sick set (SpiritAnimState)
 
             // Procedural ghost float: sin y-bob + a feed hop on the body only.
             // Mid-herd (arrived, waiting to be tagged) it hops nervously fast.
@@ -824,13 +957,15 @@ namespace AnimalFarm.Spirits
             }
             else if (expressive)
             {
-                if (mood == SpiritMoodBand.Happy) { freq *= 1.35f; amp *= 1.3f; }
-                else if (mood == SpiritMoodBand.Low) { freq *= 0.6f; amp *= 0.7f; }
+                freq *= pose.bobFreqMul;
+                amp *= pose.bobAmpMul;
             }
             if (_isSleeping) { freq *= 0.3f; amp *= 0.5f; }
             if (_quirk == SpiritQuirks.Kind.Nap) amp *= 0.35f;
 
-            float y = Mathf.Sin(Time.time * freq * 2f * Mathf.PI) * amp;
+            // Bob style comes from the species pose (sleepers always plain-float).
+            Vector2 bob = (_isSleeping ? SpiritPose.Plain : pose).Bob(Time.time, freq, amp, out float styleTilt);
+            float y = bob.y;
 
             // Happy spirits toss in a spontaneous hop now and then.
             if (expressive && !_isSleeping && mood == SpiritMoodBand.Happy
@@ -848,10 +983,24 @@ namespace AnimalFarm.Spirits
                 else y += Mathf.Sin(t * Mathf.PI) * HopHeight;
             }
 
-            // Low-mood droop: the whole body rides a little lower.
-            if (expressive && !_isSleeping && mood == SpiritMoodBand.Low) y -= 0.08f;
+            // Posture: drooped bodies ride lower, upright ones higher.
+            if (expressive && !_isSleeping) y += pose.bodyYOffset;
 
-            Renderer.transform.localPosition = new Vector3(0f, y, 0f);
+            // Naming-ceremony bow: a respectful dip and forward lean.
+            float bow = TickBow();
+            y -= 0.1f * bow;
+
+            Renderer.transform.localPosition = new Vector3(bob.x, y, 0f);
+
+            // Lean + rocking (zero while curled up asleep).
+            float tilt = 0f;
+            if (!_isSleeping)
+            {
+                tilt = styleTilt - 22f * bow;
+                if (expressive)
+                    tilt += pose.tiltDegrees + pose.swayDegrees * Mathf.Sin(Time.time * 1.1f * 2f * Mathf.PI);
+            }
+            Renderer.transform.localRotation = Quaternion.Euler(0f, 0f, tilt);
 
             // Body-local scale: sleep curl, quirk squash/stretch, startle flinch.
             // (Root scale stays owned by Init/SetFocused; these never fight it.)
@@ -887,6 +1036,12 @@ namespace AnimalFarm.Spirits
                 if (t >= 1f) _flinchTimer = -1f;
                 else bodyScale *= 1f - 0.22f * Mathf.Sin(t * Mathf.PI); // quick shrink-recoil
             }
+            // Species posture squash (upright = taller, drooped = wider and shorter).
+            if (expressive && !_isSleeping)
+            {
+                bodyScale.x *= pose.bodyScale.x;
+                bodyScale.y *= pose.bodyScale.y;
+            }
             Renderer.transform.localScale = bodyScale;
 
             // Colour + alpha shimmer.
@@ -895,11 +1050,12 @@ namespace AnimalFarm.Spirits
                 : _isSleeping ? SleepingAlpha
                 : baseColor.a;
 
-            // Low-mood desaturation (drooped + washed out); naps tint-darken.
-            if (expressive && !_isSleeping && mood == SpiritMoodBand.Low)
+            // Pose desaturation (sad/sick = drooped + washed out); naps tint-darken.
+            if (expressive && !_isSleeping && pose.saturation < 0.999f)
             {
                 float grey = baseColor.r * 0.3f + baseColor.g * 0.59f + baseColor.b * 0.11f;
-                baseColor = Color.Lerp(baseColor, new Color(grey, grey, grey, baseColor.a), 0.4f);
+                baseColor = Color.Lerp(baseColor, new Color(grey, grey, grey, baseColor.a),
+                    Mathf.Clamp01(1f - pose.saturation));
             }
             if (_quirk == SpiritQuirks.Kind.Nap)
             {
@@ -914,7 +1070,7 @@ namespace AnimalFarm.Spirits
             }
 
             float shimmer = Mathf.Sin(Time.time * ShimmerFrequency * 2f * Mathf.PI) * ShimmerAmplitude;
-            baseColor.a = Mathf.Clamp01(baseAlpha + shimmer);
+            baseColor.a = Mathf.Clamp01(baseAlpha + shimmer) * _shyFade; // silhouette shy fade-back
             Renderer.color = baseColor;
         }
 
@@ -986,16 +1142,22 @@ namespace AnimalFarm.Spirits
             {
                 _wantCheckTimer = WantCheckInterval;
 
-                bool food = _state == SpiritState.Visitor
-                    || (_state == SpiritState.Resident && _hunger01 >= HungryPromptThreshold);
-                bool home = _state == SpiritState.Resident && !HasHome;
-                bool water = _state == SpiritState.Resident && HasHome && !_taskDone
-                    && _species.taskKind == FinalTaskKind.WaterNearHome;
+                // Muscle 11: a VISITOR's bubble shows what it would need to stay
+                // (a plant icon = a crop to grow, droplet = water, sprout = the
+                // land itself, roof = it is considering a home).
+                int visitorWant = VisitorWantIndex();
+                bool food = (_state == SpiritState.Resident && _hunger01 >= HungryPromptThreshold)
+                    || visitorWant == WantFood;
+                bool home = (_state == SpiritState.Resident && !HasHome) || visitorWant == WantHome;
+                bool water = (_state == SpiritState.Resident && HasHome && !_taskDone
+                    && _species.taskKind == FinalTaskKind.WaterNearHome) || visitorWant == WantWater;
+                bool land = visitorWant == WantLand;
                 bool lonely = _state == SpiritState.Resident && _spirit < MoodLowThreshold;
 
                 // Reverse priority order: when several wants onset together,
                 // the LAST Show() wins, so food (highest) goes last.
                 UpdateWant(WantLonely, lonely);
+                UpdateWant(WantLand, land);
                 UpdateWant(WantWater, water);
                 UpdateWant(WantHome, home);
                 UpdateWant(WantFood, food);
@@ -1024,12 +1186,13 @@ namespace AnimalFarm.Spirits
             _wantActive[index] = active;
         }
 
-        /// <summary>Highest-priority active want, or -1. Food > home > water > lonely.</summary>
+        /// <summary>Highest-priority active want, or -1. Food > home > water > land > lonely.</summary>
         private int TopActiveWant()
         {
             if (_wantActive[WantFood]) return WantFood;
             if (_wantActive[WantHome]) return WantHome;
             if (_wantActive[WantWater]) return WantWater;
+            if (_wantActive[WantLand]) return WantLand;
             if (_wantActive[WantLonely]) return WantLonely;
             return -1;
         }
@@ -1116,7 +1279,7 @@ namespace AnimalFarm.Spirits
                 chance = 0.5f; // night shift: livelier after dark
             if (Random.value > chance) return false;
 
-            switch (SpiritQuirks.Pick(_species))
+            switch (SpiritQuirks.Pick(_species, _traits))
             {
                 case SpiritQuirks.Kind.Hop:
                     if (_hopTimer < 0f) _hopTimer = 0f;
@@ -1247,7 +1410,9 @@ namespace AnimalFarm.Spirits
         {
             _state = SpiritState.Visitor;
             _returningToBorder = false;
-            _wanderTarget = PickInFieldPoint(); // drift into the field
+            _stayLeaving = false;
+            _stayUnmetHours = 0f;
+            _wanderTarget = PickVisitorPoint(); // drift into the field (never onto Hard No ground)
             _hasTarget = true;
             Debug.Log($"[Spirits] {DisplayName} drifts into the garden...");
             if (SpiritManager.Instance != null) SpiritManager.Instance.NotifyBecameVisitor(this);
@@ -1255,7 +1420,8 @@ namespace AnimalFarm.Spirits
 
         private void BecomeSilhouette()
         {
-            _state = SpiritState.Silhouette; // FedCount preserved
+            _state = SpiritState.Silhouette;
+            _stayLeaving = false;
             _hasTarget = false;
             _idleTimer = Random.Range(1f, 3f);
         }
@@ -1263,9 +1429,13 @@ namespace AnimalFarm.Spirits
         private void BecomeResident()
         {
             _state = SpiritState.Resident;
-            _spirit = 60f;
+            // A visitor that was shown a kindness (a gift of its favourite food) arrives a touch happier.
+            _spirit = Mathf.Clamp(_spirit, 60f, 75f);
             _hunger01 = 0f;
             _lowSpiritSeconds = 0f;
+            _stayPhase = StayPhase.None;
+            _stayMetHours = 0f;
+            _stayRollsDone = 0;
             if (GameClock.Instance != null)
             {
                 _lastFedTotalHours = GameClock.Instance.TotalHours;
@@ -1308,16 +1478,28 @@ namespace AnimalFarm.Spirits
 
             if (DistanceToPlayer() <= TendDistance)
             {
-                // Feed — only when the walk-up feed rules would apply: a
-                // visitor working toward residency, or a hungry resident, and
-                // the favored food is in the satchel.
+                // The wish offering is the walk-up Interact's top rung; E now opens
+                // this menu, so it must stay reachable here (first row = old E default).
+                if (_state == SpiritState.Resident && _species != null && CanOfferTaskItem)
+                    into.Add(new SelectAction(
+                        $"Offer {_species.taskItemId} ({_taskProgress}/{_species.taskItemCount})",
+                        () => TryOfferTaskItem()));
+
+                // Feed — only when the walk-up feed rules would apply: a visitor
+                // (a nice gesture, never required: muscle 11) or a hungry
+                // resident, and the favored food is in the satchel.
                 bool hasFood = _species != null && Inventory.Instance != null
-                    && Inventory.Instance.Count(_species.favoredFoodId) > 0;
+                    && CropQuality.CountAny(Inventory.Instance, _species.favoredFoodId) > 0;
                 bool feedApplies = hasFood
-                    && (_state == SpiritState.Visitor
+                    && ((_state == SpiritState.Visitor && !_despawning)
                         || (_state == SpiritState.Resident && _hunger01 >= HungryPromptThreshold));
                 if (feedApplies)
-                    into.Add(new SelectAction($"Feed ({_species.favoredFoodId})", () => TryFeedAction()));
+                {
+                    string feedLabel = _state == SpiritState.Visitor
+                        ? $"Offer a gift ({_species.favoredFoodId})"
+                        : $"Feed ({_species.favoredFoodId})";
+                    into.Add(new SelectAction(feedLabel, () => TryFeedAction()));
+                }
 
                 into.Add(new SelectAction("Soothe", () => TrySootheAction()));
 
@@ -1379,14 +1561,17 @@ namespace AnimalFarm.Spirits
                 if (_species == null || _state == SpiritState.Silhouette) return "";
 
                 string food = _species.favoredFoodId;
-                bool hasFood = Inventory.Instance != null && Inventory.Instance.Count(food) > 0;
+                bool hasFood = Inventory.Instance != null && CropQuality.CountAny(Inventory.Instance, food) > 0;
 
                 switch (_state)
                 {
                     case SpiritState.Visitor:
-                        return hasFood
-                            ? $"Feed {food} ({_fedCount}/{_species.residencyFoodCount})"
-                            : $"Needs {food} ({_fedCount}/{_species.residencyFoodCount})";
+                        // Muscle 11: feeding is a gift, never the way in. No quota shown.
+                        if (hasFood && _stayPhase == StayPhase.None) return $"Offer {food} to {DisplayName}";
+                        if (_stayPhase != StayPhase.None) return $"{DisplayName} is making up its mind";
+                        return StayGate.IsMet(_species)
+                            ? $"{DisplayName} is thinking it over"
+                            : $"{DisplayName} is looking the place over";
                     case SpiritState.Resident:
                         // Mirrors the Interact ladder: offer > feed > follow > soothe.
                         if (CanOfferTaskItem)
@@ -1409,7 +1594,7 @@ namespace AnimalFarm.Spirits
         /// <summary>GiveItem wish pending and the offering is in the satchel?</summary>
         private bool CanOfferTaskItem =>
             !_taskDone && _species.taskKind == FinalTaskKind.GiveItem
-            && Inventory.Instance != null && Inventory.Instance.Count(_species.taskItemId) > 0;
+            && Inventory.Instance != null && CropQuality.CountAny(Inventory.Instance, _species.taskItemId) > 0;
 
         public bool CanInteract(GameObject actor) =>
             _species != null && !_despawning && !_ceremony && _state != SpiritState.Silhouette;
@@ -1418,12 +1603,13 @@ namespace AnimalFarm.Spirits
         {
             if (!CanInteract(actor)) return;
 
-            bool hasFood = Inventory.Instance != null && Inventory.Instance.Count(_species.favoredFoodId) > 0;
+            bool hasFood = Inventory.Instance != null
+                && CropQuality.CountAny(Inventory.Instance, _species.favoredFoodId) > 0;
 
             switch (_state)
             {
                 case SpiritState.Visitor:
-                    if (hasFood) TryFeed();
+                    if (hasFood && _stayPhase == StayPhase.None) TryFeed(); // a gift; never required
                     break;
                 case SpiritState.Resident:
                     // Priority ladder: offer the wish item > feed > follow toggle > soothe.
@@ -1440,7 +1626,8 @@ namespace AnimalFarm.Spirits
 
         private void TryOfferTaskItem()
         {
-            if (Inventory.Instance == null || !Inventory.Instance.Consume(_species.taskItemId, 1))
+            // Wish offerings spend the plainest stock first (the good stuff is for feeding).
+            if (Inventory.Instance == null || !CropQuality.ConsumeWorst(Inventory.Instance, _species.taskItemId))
                 return;
 
             _taskProgress++;
@@ -1477,22 +1664,32 @@ namespace AnimalFarm.Spirits
 
         private bool TryFeed()
         {
-            if (Inventory.Instance == null || !Inventory.Instance.Consume(_species.favoredFoodId, 1))
+            // Muscle 11: a visitor accepts a gift but is never converted by it - and a
+            // visitor already content (or already deciding) just politely declines.
+            if (_state == SpiritState.Visitor && (_stayPhase != StayPhase.None || _spirit >= VisitorGiftCap))
+            {
+                AnimalFarm.UI.FloatingText.Show(
+                    transform.position + Vector3.up * 0.8f, "(it is content already)", HerdGreyBlue);
+                return false;
+            }
+
+            // Spirits prefer higher tiers: the best stock is served first, and
+            // Fine / Gleaming food lifts contentment more (x1.5 / x2).
+            CropTier servedTier;
+            if (Inventory.Instance == null
+                || !CropQuality.ConsumeBest(Inventory.Instance, _species.favoredFoodId, out servedTier))
                 return false;
 
-            _spirit = Mathf.Clamp(_spirit + _species.feedSpiritBoost, 0f, 100f);
+            _spirit = Mathf.Clamp(_spirit + _species.feedSpiritBoost * CropQuality.FeedMultiplier(servedTier) * GroundGainMul, 0f, 100f);
             _hopTimer = 0f;
             _timesFed++;
 
             if (_state == SpiritState.Visitor)
             {
-                _fedCount++;
+                // A kindness: a little mood and a happy beat. It does NOT count toward joining.
+                SpiritVoice.Play(_species, VoiceIntent.Happy, 0.8f);
                 AnimalFarm.UI.FloatingText.Show(
-                    transform.position + Vector3.up * 0.8f,
-                    $"{_fedCount}/{_species.residencyFoodCount}", new Color(1f, 0.9f, 0.4f));
-
-                if (_fedCount >= _species.residencyFoodCount)
-                    BecomeResident();
+                    transform.position + Vector3.up * 0.8f, "(it accepts the gift)", new Color(1f, 0.9f, 0.4f));
             }
             else // Resident
             {
@@ -1518,7 +1715,7 @@ namespace AnimalFarm.Spirits
             if (Time.unscaledTime - _lastSootheRealTime < SootheCooldownRealSeconds) return false;
             _lastSootheRealTime = Time.unscaledTime;
 
-            _spirit = Mathf.Clamp(_spirit + _species.sootheSpiritBoost, 0f, 100f);
+            _spirit = Mathf.Clamp(_spirit + _species.sootheSpiritBoost * GroundGainMul, 0f, 100f);
 
             _hopTimer = 0f;
             AnimalFarm.UI.FloatingText.Show(
@@ -1639,7 +1836,9 @@ namespace AnimalFarm.Spirits
         // region (grows with parcel purchases; handles L-shapes exactly).
 
         private Vector3 PickWanderTarget() =>
-            _state == SpiritState.Silhouette ? PickBorderDriftPoint() : PickInFieldPoint();
+            _state == SpiritState.Silhouette ? PickBorderDriftPoint()
+            : _state == SpiritState.Visitor ? PickVisitorPoint()
+            : PickInFieldPoint();
 
         /// <summary>Random point anywhere in the unlocked field.</summary>
         private Vector3 PickInFieldPoint()

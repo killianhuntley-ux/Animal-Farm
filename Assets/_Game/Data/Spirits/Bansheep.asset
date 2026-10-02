@@ -28,9 +28,44 @@ MonoBehaviour:
   stretchWeight: 1
   hopWeight: 0.8
   leafChaseWeight: 0.3
+  vigorBand: {x: 5, y: 9}
+  graceBand: {x: 2, y: 5}
+  gleamBand: {x: 3, y: 7}
+  allowedTraitIds: []
   voiceBasePitch: 300
   voiceContour: -0.4
   voiceChirpSeconds: 0.16
+  animProfile:
+    happy:
+      bobStyle: 3
+      bobFreqMul: 1
+      bobAmpMul: 1.1
+      speedMul: 1.05
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1.06}
+      tiltDegrees: 0
+      swayDegrees: 5
+      saturation: 1
+    neutral:
+      bobStyle: 0
+      bobFreqMul: 0.8
+      bobAmpMul: 1
+      speedMul: 1
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 1
+    sadSick:
+      bobStyle: 0
+      bobFreqMul: 0.4
+      bobAmpMul: 0.6
+      speedMul: 0.6
+      bodyYOffset: -0.1
+      bodyScale: {x: 1.08, y: 0.88}
+      tiltDegrees: -8
+      swayDegrees: 0
+      saturation: 0.6
   hungerHours: 12
   spiritDecayPerHungryHour: 8
   feedSpiritBoost: 15
@@ -45,3 +80,10 @@ MonoBehaviour:
   taskWindowEndHour: 1
   taskDescription: Flowers for its own funeral. It insists on attending.
   taskHint: (it wants gravebloom blossoms - three, for symmetry)
+  biomeAffinities:
+  - biome: 1
+    affinity: 4
+  - biome: 2
+    affinity: 1
+  - biome: 3
+    affinity: 0

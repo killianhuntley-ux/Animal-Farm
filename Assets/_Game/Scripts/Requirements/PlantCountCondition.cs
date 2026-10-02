@@ -17,6 +17,8 @@ namespace AnimalFarm.Requirements
             return plants != null && plants.CountPlants(speciesId, minStage) >= minCount;
         }
 
+        public override ConditionTopic Topic => ConditionTopic.Plant;
+
         public override string Describe()
         {
             var plants = PlantManager.Instance;

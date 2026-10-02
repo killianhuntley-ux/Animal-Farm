@@ -15,7 +15,7 @@ namespace AnimalFarm.Spirits
     /// discovery, feeds resident counts back into the requirement engine, and
     /// persists the lot.
     /// </summary>
-    public class SpiritManager : MonoBehaviour, ISaveable
+    public partial class SpiritManager : MonoBehaviour, ISaveable
     {
         public static SpiritManager Instance { get; private set; }
 
@@ -66,12 +66,14 @@ namespace AnimalFarm.Spirits
             // first-fulfilment unlock flag survives). Runtime GetOrCreate —
             // no bootstrapper wiring, degrades cleanly in old scenes.
             AscensionPadManager.Ensure();
+            WeaveArchive.Ensure(); // Muscle 06: same reason - its "weaving" key must exist before the load
         }
 
         private void OnDestroy()
         {
             if (ReferenceEquals(ResidentPresentCondition.ResidentCounter, _residentCounter))
                 ResidentPresentCondition.ResidentCounter = null;
+            UnhookRain();
             if (Instance == this) Instance = null;
         }
 
@@ -178,7 +180,9 @@ namespace AnimalFarm.Spirits
                 if (CountResidents(species.id) >= species.maxResidents) continue;
                 if (!evaluator.IsGateOpen(species.gateChain.chainId, Gate.Appear)) continue;
 
-                Spawn(species, SpiritState.Silhouette, RandomBorderPoint());
+                if (!TryPickSpawnPoint(species, out Vector3 spawnPos)) continue; // every owned base is a Hard No for it
+
+                Spawn(species, SpiritState.Silhouette, spawnPos);
                 BumpDiscovery(species.id, DiscoveryLevel.Seen);
                 Debug.Log("[Spirits] Something stirs at the border...");
             }
@@ -254,9 +258,7 @@ namespace AnimalFarm.Spirits
                 givenName = name,
                 spirit = 70f,
                 hunger01 = 0f,
-                fedCount = species.residencyFoodCount,
                 lastFed = now,
-                timesFed = species.residencyFoodCount,
                 taskProgress = 0,
                 taskDone = false,
                 residentSince = now,
@@ -302,70 +304,7 @@ namespace AnimalFarm.Spirits
             return null;
         }
 
-        /// <summary>
-        /// Consumes two max-Spirit residents at the Loom and spawns the recipe's
-        /// cryptid as a fresh Resident (slice 06). Returns the woven spirit, or
-        /// null if the pair is invalid or no recipe matches.
-        /// </summary>
-        public SpiritAgent Weave(SpiritAgent a, SpiritAgent b, Vector3 spawnPos)
-        {
-            if (a == null || b == null || a == b) return null;
-            if (a.State != SpiritState.Resident || b.State != SpiritState.Resident) return null;
-            // "a sad spirit won't ascend to a higher creature plane" - GDD
-            if (a.Spirit < 100f || b.Spirit < 100f) return null;
-
-            var recipe = FindRecipe(a.Species, b.Species);
-            if (recipe == null || recipe.result == null) return null;
-
-            // Owner decision: essence is the weave currency — sell it or save
-            // it for rituals; deeper weaves cost more (recipe.essenceCost).
-            if (recipe.essenceCost > 0)
-            {
-                if (Inventory.Instance == null
-                    || !Inventory.Instance.Consume("essence", recipe.essenceCost))
-                    return null; // UI validates first; this is the hard gate
-            }
-
-            var result = recipe.result;
-            string nameA = WeaveParentName(a);
-            string nameB = WeaveParentName(b);
-            string newName = PortmanteauName(nameA, nameB);
-
-            var woven = Spawn(result, SpiritState.Resident, spawnPos);
-            float now = GameClock.Instance != null ? GameClock.Instance.TotalHours : 0f;
-            woven.ApplyLoadedState(new SpiritSaveRecord
-            {
-                spirit = 80f,
-                hunger01 = 0f,
-                fedCount = result.residencyFoodCount,
-                lastFed = now,
-                timesFed = result.residencyFoodCount,
-                taskProgress = 0,
-                taskDone = false,
-                residentSince = now,
-                compEntries = 0,
-                compWins = 0,
-                // Stat inheritance: the woven takes the best of each parent stat.
-                // Parents always roll >= 2, so vigor is nonzero and
-                // ApplyLoadedState won't reroll.
-                vigor = Mathf.Max(a.Vigor, b.Vigor),
-                grace = Mathf.Max(a.Grace, b.Grace),
-                gleam = Mathf.Max(a.Gleam, b.Gleam)
-            });
-            woven.SetGivenName(newName);
-
-            // The parents are consumed: free their homes, then remove them.
-            ReleaseHomeOf(a);
-            ReleaseHomeOf(b);
-            Despawn(a);
-            Despawn(b);
-
-            BumpDiscovery(result.id, DiscoveryLevel.Resident);
-
-            string resultName = !string.IsNullOrEmpty(result.displayName) ? result.displayName : result.id;
-            Debug.Log($"[Weave] {nameA} and {nameB} became {newName} the {resultName}!");
-            return woven;
-        }
+        // Weave(...) lives in SpiritManager.Weave.cs (muscle 06).
 
         private static void ReleaseHomeOf(SpiritAgent a)
         {
@@ -373,28 +312,6 @@ namespace AnimalFarm.Spirits
             if (home == null) return;
             home.Release(a);
             a.NotifyHomeLost(home);
-        }
-
-        /// <summary>Given name, falling back to the species name for the unnamed.</summary>
-        private static string WeaveParentName(SpiritAgent a)
-        {
-            if (!string.IsNullOrEmpty(a.GivenName)) return a.GivenName;
-            if (a.Species != null && !string.IsNullOrEmpty(a.Species.displayName))
-                return a.Species.displayName;
-            return "Spirit";
-        }
-
-        /// <summary>
-        /// Portmanteau: first ceil(n/2) chars of the first name + last floor(m/2)
-        /// chars of the second, first letter capitalized.
-        /// </summary>
-        private static string PortmanteauName(string nameA, string nameB)
-        {
-            string head = nameA.Substring(0, (nameA.Length + 1) / 2);
-            string tail = nameB.Substring(nameB.Length - nameB.Length / 2);
-            string merged = (head + tail).Trim();
-            if (merged.Length == 0) return "Woven";
-            return char.ToUpperInvariant(merged[0]) + merged.Substring(1);
         }
 
         public void Despawn(SpiritAgent a)

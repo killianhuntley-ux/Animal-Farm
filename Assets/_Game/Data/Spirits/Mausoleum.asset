@@ -28,9 +28,44 @@ MonoBehaviour:
   stretchWeight: 0.8
   hopWeight: 0.6
   leafChaseWeight: 0.6
+  vigorBand: {x: 2, y: 5}
+  graceBand: {x: 4, y: 8}
+  gleamBand: {x: 3, y: 7}
+  allowedTraitIds: []
   voiceBasePitch: 740
   voiceContour: 0.6
   voiceChirpSeconds: 0.06
+  animProfile:
+    happy:
+      bobStyle: 1
+      bobFreqMul: 1.6
+      bobAmpMul: 1
+      speedMul: 1.15
+      bodyYOffset: 0
+      bodyScale: {x: 0.95, y: 1.06}
+      tiltDegrees: 0
+      swayDegrees: 3
+      saturation: 1
+    neutral:
+      bobStyle: 0
+      bobFreqMul: 1.15
+      bobAmpMul: 0.9
+      speedMul: 1
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 1
+    sadSick:
+      bobStyle: 0
+      bobFreqMul: 0.7
+      bobAmpMul: 0.5
+      speedMul: 0.7
+      bodyYOffset: -0.1
+      bodyScale: {x: 1.1, y: 0.82}
+      tiltDegrees: 12
+      swayDegrees: 0
+      saturation: 0.55
   hungerHours: 14
   spiritDecayPerHungryHour: 8
   feedSpiritBoost: 15
@@ -45,3 +80,10 @@ MonoBehaviour:
   taskWindowEndHour: 1
   taskDescription: A last taste of something it never dared try.
   taskHint: (it hungers for one perfect murkberry)
+  biomeAffinities:
+  - biome: 1
+    affinity: 3
+  - biome: 2
+    affinity: 1
+  - biome: 3
+    affinity: 1

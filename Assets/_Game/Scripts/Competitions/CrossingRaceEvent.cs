@@ -635,7 +635,7 @@ namespace AnimalFarm.Competitions
             {
                 _manager.ReportFinished(_spirit, new CompetitionResult
                 {
-                    eventName = "The Crossing",
+                    eventName = "Sprint",
                     placement = placement,
                     entrants = 3
                 });

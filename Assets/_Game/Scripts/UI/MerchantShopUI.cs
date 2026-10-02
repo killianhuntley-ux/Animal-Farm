@@ -52,6 +52,8 @@ namespace AnimalFarm.UI
             new StockEntry("seed_palewheat", "Palewheat Seed", "fell off a cart, allegedly", 2),
             new StockEntry("seed_gravebloom", "Gravebloom Seed", "picked up cheap at a funeral", 3),
             new StockEntry("seed_murkberry", "Murkberry Seed", "don't ask which murk", 3),
+            new StockEntry("seed_reed", "Reed Seed", "for the pond's shallow rim", 2),
+            new StockEntry("seed_glowcaplily", "Glowcap Lily Seed", "floats; glows faintly, unprompted", 4),
         };
 
         // Treats a notch under the town vendor's 5.
@@ -122,7 +124,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 

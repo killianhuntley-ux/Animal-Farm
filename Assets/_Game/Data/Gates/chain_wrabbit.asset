@@ -15,5 +15,5 @@ MonoBehaviour:
   chainId: wrabbit
   appear: {fileID: 11400000, guid: 8db4e65890c7f0542b606e2febdac541, type: 2}
   visit: {fileID: 11400000, guid: c643d641423e60d4fb52365a405dcba9, type: 2}
-  resident: {fileID: 11400000, guid: c643d641423e60d4fb52365a405dcba9, type: 2}
+  resident: {fileID: 11400000, guid: 10c7cd42a35564948839cd09926c9b28, type: 2}
   fulfil: {fileID: 0}

@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f12ae884f7b736d4dbd9540918af97d1, type: 3}
+  m_Name: Trait_brave
+  m_EditorClassIdentifier: 
+  id: brave
+  displayName: Brave
+  flavor: Marches toward whatever just squeaked.
+  rollWeight: 1
+  conflictsWith:
+  - skittish
+  napMul: 0.8
+  stretchMul: 1
+  hopMul: 1
+  leafChaseMul: 1.2
+  trainingAppetite: 1.2
+  vigorAppetite: 1.6
+  graceAppetite: 1
+  gleamAppetite: 1
+  baitAppetite: 1

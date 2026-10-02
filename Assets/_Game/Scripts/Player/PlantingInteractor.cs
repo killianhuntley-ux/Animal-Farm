@@ -81,6 +81,8 @@ namespace AnimalFarm.Player
 
         private void OnInteractPressed()
         {
+            // The press that just dismounted the mount is spent (handler order is not fixed).
+            if (Time.frameCount == PoutyMount.DismountFrame) return;
             if (!TryGetPlantableCell(out var cell)) return;
 
             if (SeedPickerUI.Instance != null)
@@ -105,15 +107,52 @@ namespace AnimalFarm.Player
         {
             cell = default;
 
+            // Interact dismounts first while riding: no plant hint (or picker) then.
+            if (PoutyMount.IsRiding) return false;
+
             // An interactable in focus wins; planting is the fallback action.
             if (_sensor != null && _sensor.Current != null) return false;
 
             if (_tools == null || !_tools.TryGetTargetCell(out cell)) return false;
 
             var grid = TerrainGrid.Instance;
-            if (grid == null || grid.GetSurface(cell) != Surface.Dirt) return false;
+            if (grid == null || !grid.IsUsable(cell)) return false; // locked land is no planting/painting spot
+
+            Surface surface = grid.GetSurface(cell);
+            if (surface == Surface.Water)
+            {
+                // Water species: only offered once the shepherd actually holds
+                // water seeds that can actually root here (shallowOnly species
+                // refuse deep water; keeps the prompt off every pond edge).
+                if (!HoldsWaterSeeds(grid.IsShallowRim(cell))) return false;
+            }
+            else if (surface == Surface.Scrub || surface == Surface.Grass)
+            {
+                // Open ground: only a load-spreading spot (sand or rich mud in the satchel, no home on it).
+                var inv = Inventory.Instance;
+                if (inv == null || (inv.Count(VendorUI.SandLoadId) <= 0 && inv.Count(SwampVendor.MudLoadId) <= 0)) return false;
+                if (AnimalFarm.Spirits.Home.AnyAtCell(cell)) return false;
+            }
+            else if (surface != Surface.Dirt && surface != Surface.Mud) return false; // Sand: nothing to offer (till it first)
 
             return PlantManager.Instance != null && !PlantManager.Instance.HasPlantAt(cell);
+        }
+
+        /// <summary>True if a water-species seed packet that can be sown on this cell is in the satchel.</summary>
+        private bool HoldsWaterSeeds(bool shallowCell)
+        {
+            var inv = Inventory.Instance;
+            var species = _tools != null ? _tools.SeedSpecies : null;
+            if (inv == null || species == null) return false;
+
+            for (int i = 0; i < species.Length; i++)
+            {
+                var s = species[i];
+                if (s != null && s.requiredSurface == Surface.Water && (!s.shallowOnly || shallowCell)
+                    && inv.Count("seed_" + s.id) > 0)
+                    return true;
+            }
+            return false;
         }
 
         // ------------------------------------------------------------------ UI

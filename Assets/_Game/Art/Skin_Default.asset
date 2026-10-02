@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   body: {fileID: 3792278354558073419, guid: 96d26990e0003594bb3796713c782abf, type: 3}
   head: {fileID: 8171817715479770135, guid: 666b524a3c5e42546b6f095fbd487e40, type: 3}
-  bodyUp: {fileID: 0}
-  headUp: {fileID: 0}
-  bodyDown: {fileID: 0}
-  headDown: {fileID: 0}
+  bodyUp: {fileID: -5866221720746686446, guid: 5e2ba80cd8f714b48832f65fbe10ebf9, type: 3}
+  headUp: {fileID: -5430558421461018570, guid: 715ce380bd66a5441a12c41ed6218375, type: 3}
+  bodyDown: {fileID: 7175794427854039765, guid: 37a3600b886a91740a9942eecf674811, type: 3}
+  headDown: {fileID: 4417042300599352291, guid: 21b8a2845326a9d40b09f50e50301f77, type: 3}
   tint: {r: 1, g: 1, b: 1, a: 1}

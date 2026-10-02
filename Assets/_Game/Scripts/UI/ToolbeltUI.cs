@@ -95,7 +95,7 @@ namespace AnimalFarm.UI
         {
             if (AnimalFarm.Core.UIInputLock.TextInputActive) return; // typing in console
             if (_open) Close();
-            else Open();
+            else if (!AnimalFarm.Core.UIInputLock.BlockDirectKeys) Open(); // never stack on another modal
         }
 
         private void Open()
@@ -122,14 +122,16 @@ namespace AnimalFarm.UI
             if (!_open) return;
 
             _open = false;
-            AnimalFarm.Core.UIInputLock.ModalOpen = false;
+            // A running ceremony owns the modal flag and the input block.
+            bool ceremony = AnimalFarm.Core.UIInputLock.CeremonyActive;
+            if (!ceremony) AnimalFarm.Core.UIInputLock.ModalOpen = false;
             if (_panel != null) _panel.SetActive(false);
 
             if (GameInput.Instance != null)
             {
-                // Don't hand input back if the pause menu still needs it blocked.
+                // Don't hand input back if the pause menu or a ceremony still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !ceremony) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 

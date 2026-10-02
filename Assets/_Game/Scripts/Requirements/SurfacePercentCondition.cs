@@ -16,6 +16,8 @@ namespace AnimalFarm.Requirements
             return grid != null && grid.SurfacePercent(surface) >= minPercent;
         }
 
+        public override ConditionTopic Topic => surface == Surface.Water ? ConditionTopic.Water : ConditionTopic.Ground;
+
         public override string Describe()
         {
             var grid = TerrainGrid.Instance;

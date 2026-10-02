@@ -4,6 +4,38 @@
 **Problem:** the land is a spreadsheet with a tint — it never acts on its own, and "lush grassland" is the only implied goal.
 All verdicts are owner decisions, 2026-09-30 (question-round format).
 
+## Build status (2026-10-01, wave 2)
+
+Compiled clean, awaiting owner playtest. (Note: verdict 10 "No seasons" is superseded by the Muscle 05 calendar; rain frequency now varies by underworld season.)
+
+**BUILT (by build-list item)**
+1. Surface expansion - Sand surface, shallow-rim render state, edge-blended surfaces.
+2. BiomeScorer - per-base census (Desert at 40% sand, Swamp at 12% water + 2 plants beside it, Grassland at 40% grass, else Barren), F1 overlay, `BiomeIs` condition with a minimum-score field.
+3. Spirit biome affinity - 5-step table on every species; mood gain multiplier; silhouette spawn weighting; road strain; journal "Biomes:" line; Hard No refuses new visitors' feeding and new homes, existing residents drift down to a floor (never evicted).
+4. World restructure - PARTIAL: 3x3 home cluster, buffer land, West Road Rights, Reedmire swamp base (4 parcels). Land Office is a deed list (The Registrar), not a graphical base/road map.
+5. Rain - weather scheduler by season, visuals + sound, auto-water, pond-edge flood, swamp-lovers enjoy rain (shelter code exists but no species triggers it).
+6. Water life - PARTIAL: shallow rim, plantable reed and glowcap lily, water-habitat spirits idle at ponds.
+7. Grass bounded spread - built.
+8. Crop depth - regrow flags (murkberry, reed), 3 quality tiers, wilt visuals, star badges, sell and feed multipliers.
+9. Compost - leavings from happy residents, apply to soil or crop, weed fiber as the humble source.
+10. Terrain materials - PARTIAL: Sand loads for sale.
+
+**NOT BUILT**
+- 4x4 expansion of the home cluster; Land Office as a world map of bases and roads.
+- Shallow-water wading (rim still blocks movement; owner question 5) and plant wind-sway (question 4).
+- Rich mud (what it does mechanically is open; question 8) and a separate landscaper vendor (sand is sold by the town vendor).
+- Desert-native species, so rain-shelter behavior and Desert bases attracting anyone are untestable (question 9).
+- Hard No visitors retreating and fading like silhouettes (question 10) and blocking a home on Hard No ground (question 11).
+
+**ASSUMPTIONs made in build**
+- Crop quality: Fine at watered-share score >= 0.55, Gleaming >= 0.90; sell x1.5 / x2.5; spirits fed Fine/Gleaming gain x1.5 / x2.
+- Compost: x1.25 growth and +0.15 quality score; each happy resident (Spirit >= 70) rolls a 25% leaving every ~40 s, max 6 uncollected; 3 fiber substitute for 1 compost; fiber sells at 1 obol (owner question 1).
+- Pond flood: rises after 1 game hour of rain, recedes 3 game hours after it stops, affects ground within 1 cell of water; never destructive.
+- Grass spread: one scrub cell every ~3-5 game hours, only within 2 cells of hand-sown grass.
+- Sand: 8 obols for 4 loads at the town vendor, painted via the seed picker on open scrub/grass.
+- Affinity spawn weights: Love 6 / Like 3 / Neutral 1 / Dislike 0.2 / Hard No 0; mood gain multipliers Love x1.5 / Like x1.25 / Neutral x1 / Dislike x0.5 / Hard No x0.5; wrong-ground drain 3 Spirit per game hour to a floor of 35; Love ground adds +1.2/h up to 85.
+- Rain: enjoyers get +0.25 Spirit per beat (cap 80).
+
 ---
 
 ## Verdicts (locked)
@@ -23,7 +55,7 @@ Each biome is scored from its terrain mix (surfaces, plant types, water coverage
 - You **buy road rights** to reach a new biome area, then buy its parcels one at a time, growing that satellite base toward its own max multi-parcel size.
 - Multiple smaller bases, **bringing spirits to and fro** along roads. **Danger on roads is a hook**: escorting a swamp spirit through hell territory because you really want to weave it with a spirit at the hell base.
 - Biome unit = the base (parcel cluster). Each base is one biome canvas with its own score.
-(This supersedes the current 2-parcel setup and redefines slice 08 Frontier's muscle. Ferryman parcel overview becomes a world map of bases + roads.)
+(This supersedes the current 2-parcel setup and redefines slice 08 Frontier's muscle. Land Office (The Registrar -- Charon appears ONLY at the Styx, owner rule 2026-10-01) parcel overview becomes a world map of bases + roads.)
 
 ### 3. Terrain look: edge-blended autotiling
 Rounded, blended transition edges (grass laps over dirt, water gets banks). Grid underneath, organic read. No marching-squares experiment this pass.
@@ -60,7 +92,7 @@ Regions are the variety axis (prairie, swamp, hell — fixed moods). Day/night +
 1. **Surface expansion** — add Sand (and ShallowWater rim as a render state); autotile edge blending for all surface pairs.
 2. **BiomeScorer** — per-base terrain-mix census → biome type + quality score; F1 overlay panel; requirement-engine condition atoms (`BiomeIs`, `BiomeScore >=`).
 3. **Spirit biome affinity** — 5-step affinity table on SpiritSpeciesDefinition; mood modifier + residency gate wiring.
-4. **World restructure** — 3x3 starting cluster (expandable 4x4), unbuyable buffer land, road-rights purchase, satellite base scaffolding (at least ONE second biome base reachable by road this pass). Ferryman overview → base/road map.
+4. **World restructure** — 3x3 starting cluster (expandable 4x4), unbuyable buffer land, road-rights purchase, satellite base scaffolding (at least ONE second biome base reachable by road this pass). Land Office overview → base/road map.
 5. **Rain** — weather scheduler, rain day visuals/sound, auto-water, pond-edge temporary flood, spirit rain reactions.
 6. **Water life** — banks/shallow rim, wade-slow, plantable water species, water-idle spirit behavior.
 7. **Grass bounded spread** — radius-bounded creep around sown patches.

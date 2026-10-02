@@ -28,9 +28,44 @@ MonoBehaviour:
   stretchWeight: 0.7
   hopWeight: 0.8
   leafChaseWeight: 1
+  vigorBand: {x: 2, y: 5}
+  graceBand: {x: 4, y: 8}
+  gleamBand: {x: 6, y: 10}
+  allowedTraitIds: []
   voiceBasePitch: 820
   voiceContour: 0.5
   voiceChirpSeconds: 0.07
+  animProfile:
+    happy:
+      bobStyle: 4
+      bobFreqMul: 1.3
+      bobAmpMul: 1.2
+      speedMul: 1.15
+      bodyYOffset: 0.02
+      bodyScale: {x: 1.04, y: 1.02}
+      tiltDegrees: 0
+      swayDegrees: 4
+      saturation: 1
+    neutral:
+      bobStyle: 3
+      bobFreqMul: 0.9
+      bobAmpMul: 0.9
+      speedMul: 1
+      bodyYOffset: 0
+      bodyScale: {x: 1, y: 1}
+      tiltDegrees: 0
+      swayDegrees: 0
+      saturation: 1
+    sadSick:
+      bobStyle: 0
+      bobFreqMul: 0.4
+      bobAmpMul: 0.5
+      speedMul: 0.6
+      bodyYOffset: -0.12
+      bodyScale: {x: 1, y: 0.86}
+      tiltDegrees: 5
+      swayDegrees: 0
+      saturation: 0.5
   hungerHours: 16
   spiritDecayPerHungryHour: 8
   feedSpiritBoost: 15
@@ -45,3 +80,10 @@ MonoBehaviour:
   taskWindowEndHour: 2
   taskDescription: One last portent, whispered at the witching hour.
   taskHint: (sit with it in the small hours)
+  biomeAffinities:
+  - biome: 1
+    affinity: 2
+  - biome: 2
+    affinity: 3
+  - biome: 3
+    affinity: 1

@@ -91,6 +91,10 @@ namespace AnimalFarm.Player
 
             Vector3 followPos = _overridden ? _overridePos
                 : new Vector3(target.position.x, target.position.y, 0f);
+            // Seated (muscle 01): the camera roams free of the shepherd by the
+            // rest system's pan offset; it eases home after standing (SmoothDamp).
+            if (!_overridden && ShepherdRest.IsSeated)
+                followPos += (Vector3)ShepherdRest.CameraPan;
             Vector3 desired = new Vector3(followPos.x + lead.x, followPos.y + lead.y, CameraZ);
             if (!_overridden) desired = ClampToOwnedBounds(desired); // competitions roam free
             Vector3 pos = Vector3.SmoothDamp(transform.position, desired, ref _followVelocity, smoothTime);

@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3a266b0af7194a498c826f8c67b0b6a, type: 3}
+  m_Name: Glowcap Lily
+  m_EditorClassIdentifier: 
+  id: glowcaplily
+  displayName: Glowcap Lily
+  stageSprites:
+  - {fileID: -4709605664841142755, guid: fdb65a5bb04d9fc47a09bb073e173068, type: 3}
+  - {fileID: -3640251099211010548, guid: a046b2a7b2becb7468a5f16ced4c07fb, type: 3}
+  - {fileID: 1005304168072899361, guid: 06ba853c197a082459603a8c088c2fc8, type: 3}
+  hoursPerStage: 9
+  requiredSurface: 3
+  produceId: glowcap
+  produceAmount: 1
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  regrows: 0
+  regrowStage: 1
+  shallowOnly: 0

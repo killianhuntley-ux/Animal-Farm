@@ -23,3 +23,6 @@ MonoBehaviour:
   produceId: berry
   produceAmount: 3
   tint: {r: 1, g: 1, b: 1, a: 1}
+  regrows: 1
+  regrowStage: 1
+  shallowOnly: 0

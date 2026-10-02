@@ -270,6 +270,13 @@ namespace AnimalFarm.World
         private static readonly Color YoungTint = new Color(0.45f, 0.3f, 0.5f);
         private static readonly Color MatureTint = new Color(0.3f, 0.19f, 0.36f);
         private static readonly Color SpiritLossPurple = new Color(0.72f, 0.5f, 0.85f);
+        // Swamp variant (muscle 08 item 3): "mirewort" -- same harm, murkier look, wider reach.
+        private static readonly Color MireYoungTint = new Color(0.28f, 0.46f, 0.40f);
+        private static readonly Color MireMatureTint = new Color(0.18f, 0.32f, 0.29f);
+        private const float MireRadiusMul = 1.2f;
+
+        /// <summary>True for the swamp variant (sprouted inside the Reedmire enclosure).</summary>
+        public bool IsMirewort { get; private set; }
 
         public Vector2Int Cell { get; private set; }
         public float SpawnedAtTotalHours { get; private set; }
@@ -294,7 +301,8 @@ namespace AnimalFarm.World
 
             _renderer = gameObject.AddComponent<SpriteRenderer>();
             _renderer.sprite = sprite;
-            _renderer.color = YoungTint;
+            IsMirewort = FrontierGeometry.InSwamp(transform.position);
+            _renderer.color = IsMirewort ? MireYoungTint : YoungTint;
             _renderer.sortingOrder = 1;
             if (mat != null) _renderer.sharedMaterial = mat;
 
@@ -306,7 +314,7 @@ namespace AnimalFarm.World
             col.isTrigger = true;
             col.radius = 0.45f;
 
-            WorldLabel.Attach(gameObject, "Weed", -0.6f);
+            WorldLabel.Attach(gameObject, IsMirewort ? "Mirewort" : "Weed", -0.6f);
 
             RefreshMaturity();
         }
@@ -335,7 +343,7 @@ namespace AnimalFarm.World
             IsMature = true;
             _baseScale = Vector3.one * 1.3f;
             transform.localScale = _focused ? _baseScale * FocusScale : _baseScale;
-            if (_renderer != null) _renderer.color = MatureTint;
+            if (_renderer != null) _renderer.color = IsMirewort ? MireMatureTint : MatureTint;
         }
 
         /// <summary>Compounding friction, never erasure: nearby residents lose a
@@ -344,7 +352,7 @@ namespace AnimalFarm.World
         {
             if (SpiritManager.Instance == null) return;
 
-            float radius = IsMature ? MatureHarmRadius : YoungHarmRadius;
+            float radius = (IsMature ? MatureHarmRadius : YoungHarmRadius) * (IsMirewort ? MireRadiusMul : 1f);
             float loss = IsMature ? MatureSpiritLoss : YoungSpiritLoss;
 
             var spirits = SpiritManager.Instance.AllSpirits;
@@ -395,7 +403,7 @@ namespace AnimalFarm.World
 
         // ---- IInteractable ---------------------------------------------------------
 
-        public string PromptText => "Pull weed";
+        public string PromptText => IsMirewort ? "Pull mirewort" : "Pull weed";
 
         public bool CanInteract(GameObject actor) => true;
 
@@ -409,7 +417,9 @@ namespace AnimalFarm.World
 
         // ---- ISelectable -------------------------------------------------------------
 
-        public string SelectableTitle => IsMature ? "Weed (grown wild)" : "Weed";
+        public string SelectableTitle => IsMirewort
+            ? (IsMature ? "Mirewort (grown wild)" : "Mirewort")
+            : (IsMature ? "Weed (grown wild)" : "Weed");
 
         public void GetSelectActions(List<SelectAction> into)
         {

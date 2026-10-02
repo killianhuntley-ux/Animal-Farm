@@ -71,6 +71,12 @@ namespace AnimalFarm.UI
         private RectTransform _sfxFillRt;
         private Image _sfxFill;
         private Text _sfxValueText;
+        private RectTransform _voiceFillRt;
+        private Image _voiceFill;
+        private Text _voiceValueText;
+        private RectTransform _ambienceFillRt;
+        private Image _ambienceFill;
+        private Text _ambienceValueText;
         private Button _shakeButton;
         private Text _shakeLabel;
         private Button _textSpeedButton;
@@ -162,7 +168,7 @@ namespace AnimalFarm.UI
             {
                 // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.CeremonyActive) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
@@ -187,7 +193,7 @@ namespace AnimalFarm.UI
             panel.SetParent(overlayRt, false);
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(460f, 560f);
+            panel.sizeDelta = new Vector2(460f, 680f); // room for the Voice + Ambience rows
 
             var panelImg = panel.gameObject.AddComponent<Image>();
             UIStyle.ApplyPanel(panelImg, UIStyle.PanelBg);
@@ -213,6 +219,10 @@ namespace AnimalFarm.UI
                 () => NudgeMusic(-VolumeStep), () => NudgeMusic(VolumeStep));
             BuildVolumeRow(panel, "SFX", out _sfxFillRt, out _sfxFill, out _sfxValueText,
                 () => NudgeSfx(-VolumeStep), () => NudgeSfx(VolumeStep));
+            BuildVolumeRow(panel, "Voice", out _voiceFillRt, out _voiceFill, out _voiceValueText,
+                () => NudgeVoice(-VolumeStep), () => NudgeVoice(VolumeStep));
+            BuildVolumeRow(panel, "Ambient", out _ambienceFillRt, out _ambienceFill, out _ambienceValueText,
+                () => NudgeAmbience(-VolumeStep), () => NudgeAmbience(VolumeStep));
 
             UIStyle.MakeDivider(panel);
 
@@ -308,6 +318,18 @@ namespace AnimalFarm.UI
             Refresh();
         }
 
+        private void NudgeVoice(float delta)
+        {
+            AudioGuard.VoiceVolume = Mathf.Round((AudioGuard.VoiceVolume + delta) * 10f) / 10f;
+            Refresh();
+        }
+
+        private void NudgeAmbience(float delta)
+        {
+            AudioGuard.AmbienceVolume = Mathf.Round((AudioGuard.AmbienceVolume + delta) * 10f) / 10f;
+            Refresh();
+        }
+
         private void OnToggleShake()
         {
             ScreenShakeEnabled = !ScreenShakeEnabled;
@@ -329,6 +351,8 @@ namespace AnimalFarm.UI
 
             SetBar(_musicFillRt, _musicFill, _musicValueText, AmbientMusic.MusicVolume);
             SetBar(_sfxFillRt, _sfxFill, _sfxValueText, Bleeps.SfxVolume);
+            SetBar(_voiceFillRt, _voiceFill, _voiceValueText, AudioGuard.VoiceVolume);
+            SetBar(_ambienceFillRt, _ambienceFill, _ambienceValueText, AudioGuard.AmbienceVolume);
 
             StyleToggle(_shakeButton, _shakeLabel,
                 ScreenShakeEnabled ? "Screen shake: ON" : "Screen shake: OFF", ScreenShakeEnabled);

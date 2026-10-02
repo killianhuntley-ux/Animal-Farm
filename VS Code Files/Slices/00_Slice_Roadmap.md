@@ -42,6 +42,27 @@ All muscle design lives in [../Muscle/](../Muscle/) — one doc per area, every 
 | [08+09 Frontier/Economy](../Muscle/08_Frontier_Economy_Muscle.md) | World + money | Walk the roads (all 4 dangers + defense items), **swamp satellite first**, vendors-only selling, traveling merchants, biome-exclusive vendors, the **Pouty Mount** |
 | [10 Presentation](../Muscle/10_Presentation_Muscle.md) | Polish + loop | Guide-light personality (tutorial-scoped, "Navi but less intrusive"), procedural ambient music, options+rebinding, **in-game playtest feedback tool** |
 
+**Status (2026-10-01): wave 2 built, compiled clean, awaiting owner playtest.** Muscle docs 01-08 each carry a "Build status (2026-10-01, wave 2)" section (built / not built / assumptions); the in-game QA checklist (F8) has concrete checks for every new system and keeps only the genuinely unbuilt items as "Not built yet" rows.
+
+**Owner answers (2026-10-01) to the wave-2 blockers:**
+
+1. Compost & fiber: KEEP -- 3 fiber = 1 compost substitute, fiber sells 1 obol.
+2. Villain seasons: YES -- overall rate flat, each underworld season favors one archetype.
+3. E key: E ALWAYS opens the context menu on selectables (keyboard/gamepad menu nav + outline highlight).
+4. Plant bend/sway: transform wobble in Plant.cs now.
+5. Shallow water: rim becomes walkable and slows the shepherd; deep water stays solid.
+6. Competition board: read-only schedule (upcoming competitions + who is competing) when no competition is taking place; on a scheduled event day it opens for entries -- bring a creature along (following you) and interact with the board to enter it.
+7. Land office: keep The Registrar.
+8. Rich mud: plantable swamp soil (always watered, counts toward Swamp), sold by the load at the Mire Peddler.
+9. Desert species: author one desert-native species.
+10. CORE LOOP VERDICT (overrides feed-to-convert): spirits come to visit because they got interested in what you are doing (e.g. a plant they like); when full criteria are met they visit in full body and DECIDE to stay on their own (chance roll). No feeding-to-join. Hard-No species never visit that ground.
+11. Home placement on Hard-No ground: allow silently.
+12. Pouty Mount: joins some time after you buy rights to a second area and have been crossing the roads to and fro (not a field count). Name "Grudge" kept as placeholder.
+
+Status: wave 2b BUILT 2026-10-01 (all answers implemented; reviewed twice; compiled clean; scene regenerated). Awaiting owner playtest.
+
+**Open (minor):** (a) should a deciding visitor wait for the shepherd within 15 units before its naming ceremony (current), or name wherever? (b) add met/unmet ticks to journal requirement lists?
+
 ## Playtest log (owner sessions)
 
 - **2026-09-29 (slice 01):** all works; movement fine; walk-bob too fast (fixed: freq 2.2→0.55). Waystone flavor was log-only (fixed: floating world text).

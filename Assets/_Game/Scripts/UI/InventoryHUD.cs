@@ -74,7 +74,7 @@ namespace AnimalFarm.UI
             // Coins pinned first, on their own line (slice 09 economy).
             var sb = new StringBuilder();
             int coins = Inventory.Instance.Count("coin");
-            if (coins > 0) sb.Append("Obols: ").Append(coins).Append('\n'); // the ferryman's toll
+            if (coins > 0) sb.Append("Obols: ").Append(coins).Append('\n'); 
 
             bool hasPouchItems = items.Count > (coins > 0 ? 1 : 0);
             if (hasPouchItems)
@@ -83,7 +83,7 @@ namespace AnimalFarm.UI
                 foreach (var kv in items)
                 {
                     if (kv.Key == "coin") continue; // rendered above
-                    sb.Append("  ").Append(kv.Key).Append(" x").Append(kv.Value).Append('\n');
+                    sb.Append("  ").Append(CropQuality.DisplayName(kv.Key)).Append(" x").Append(kv.Value).Append('\n');
                 }
             }
             _text.text = sb.ToString();

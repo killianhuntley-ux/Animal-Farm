@@ -38,10 +38,13 @@ namespace AnimalFarm.EditorTools
             WriteUISoftRect("ui_bar", 24, 24, Color.white, roundness: 0.9f);
 
             // name, width, height, base color, style
-            WriteSoftRect("shepherd_body", 40, 56, new Color(0.45f, 0.40f, 0.55f), roundness: 0.45f);
-            WriteCircle("shepherd_head", 30, new Color(0.93f, 0.83f, 0.72f));
-            WriteSoftRect("shepherd_body_alt", 40, 56, new Color(0.30f, 0.50f, 0.45f), roundness: 0.45f);
-            WriteCircle("shepherd_head_alt", 30, new Color(0.85f, 0.88f, 0.95f));
+            // Shepherd poses (muscle 01, 4-dir facing): side (also the left
+            // pose via flipX), up (back of head) and down (face). Each skin
+            // ships all three; the artists inherit this exact slot layout.
+            WriteShepherdPoses("", new Color(0.45f, 0.40f, 0.55f), new Color(0.93f, 0.83f, 0.72f),
+                new Color(0.30f, 0.22f, 0.18f));
+            WriteShepherdPoses("_alt", new Color(0.30f, 0.50f, 0.45f), new Color(0.85f, 0.88f, 0.95f),
+                new Color(0.52f, 0.56f, 0.64f));
 
             WriteNoiseRect("ground_grass", 64, 64, new Color(0.32f, 0.45f, 0.28f), noise: 0.035f);
 
@@ -95,12 +98,19 @@ namespace AnimalFarm.EditorTools
             WriteFlower("gravebloom_ripe", 36, new Color(0.62f, 0.42f, 0.75f), open: true);
             WriteBush("murkberry_mid", 30, new Color(0.25f, 0.35f, 0.28f), berries: false);
             WriteBush("murkberry_ripe", 34, new Color(0.25f, 0.35f, 0.28f), berries: true);
+            // water species (muscle 02): reeds ride the stalk art, lilies get a pad + glowcap bloom
+            WriteStalks("reed_mid", 32, 22, new Color(0.40f, 0.58f, 0.34f));
+            WriteStalks("reed_ripe", 32, 31, new Color(0.52f, 0.60f, 0.30f));
+            WriteLily("glowcap_mid", 32, bloom: false);
+            WriteLily("glowcap_ripe", 32, bloom: true);
             WriteCircle("pebble", 12, new Color(0.55f, 0.53f, 0.50f));
             WriteTuft("grass_tuft", 20, new Color(0.26f, 0.40f, 0.23f));
             WriteSoftRect("rock", 44, 34, new Color(0.45f, 0.44f, 0.42f), roundness: 0.6f);
             WriteSoftRect("waystone", 36, 58, new Color(0.60f, 0.60f, 0.66f), roundness: 0.35f);
             WriteCircle("white_circle", 32, Color.white);
             WriteSoftRect("white_rect", 32, 32, Color.white, roundness: 0.2f);
+
+            FrontierArtGenerator.Generate(); // swamp spirits + homes (muscle 08)
 
             AssetDatabase.Refresh();
             foreach (var path in Directory.GetFiles(Dir, "*.png"))
@@ -137,7 +147,10 @@ namespace AnimalFarm.EditorTools
 
         // ---- shape writers ------------------------------------------------
 
-        private static void WriteCircle(string name, int size, Color c)
+        private static void WriteCircle(string name, int size, Color c) =>
+            Save(CircleTex(size, c), name);
+
+        private static Texture2D CircleTex(int size, Color c)
         {
             var tex = NewTex(size, size);
             float r = size * 0.5f - 0.5f;
@@ -151,10 +164,13 @@ namespace AnimalFarm.EditorTools
                 float shade = Mathf.Lerp(0.85f, 1.1f, (y / (float)size));
                 tex.SetPixel(x, y, new Color(c.r * shade, c.g * shade, c.b * shade, a));
             }
-            Save(tex, name);
+            return tex;
         }
 
-        private static void WriteSoftRect(string name, int w, int h, Color c, float roundness)
+        private static void WriteSoftRect(string name, int w, int h, Color c, float roundness) =>
+            Save(SoftRectTex(w, h, c, roundness), name);
+
+        private static Texture2D SoftRectTex(int w, int h, Color c, float roundness)
         {
             var tex = NewTex(w, h);
             float rad = Mathf.Min(w, h) * 0.5f * Mathf.Clamp01(roundness);
@@ -170,7 +186,7 @@ namespace AnimalFarm.EditorTools
                 float shade = Mathf.Lerp(0.88f, 1.08f, y / (float)h);
                 tex.SetPixel(x, y, new Color(c.r * shade, c.g * shade, c.b * shade, a));
             }
-            Save(tex, name);
+            return tex;
         }
 
         private static void WriteNoiseRect(string name, int w, int h, Color c, float noise)
@@ -297,6 +313,47 @@ namespace AnimalFarm.EditorTools
                     for (int x = -1; x <= 1; x++)
                         if (x * x + y * y <= 1) tex.SetPixel(bx + x, by + y, berry);
                 }
+            }
+            Save(tex, name);
+        }
+
+        /// <summary>Floating lily pad (flat green ellipse) with an optional glowing cyan bloom.</summary>
+        private static void WriteLily(string name, int size, bool bloom)
+        {
+            var tex = ClearTex(size, size);
+            var pad = new Color(0.22f, 0.45f, 0.32f);
+            Vector2 padCenter = new Vector2(size * 0.5f, size * 0.30f);
+            float rx = size * 0.42f, ry = size * 0.20f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = (x - padCenter.x) / rx, dy = (y - padCenter.y) / ry;
+                float d = dx * dx + dy * dy;
+                if (d > 1f) continue;
+                if (x > padCenter.x && y > padCenter.y && Mathf.Abs(dy) < 0.12f) continue; // pad notch
+                float shade = Mathf.Lerp(1.15f, 0.8f, d);
+                tex.SetPixel(x, y, new Color(pad.r * shade, pad.g * shade, pad.b * shade, 1f));
+            }
+            if (bloom)
+            {
+                Vector2 c = new Vector2(size * 0.5f, size * 0.48f);
+                float r = size * 0.16f;
+                for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x, y), c);
+                    if (d <= r)
+                    {
+                        float k = Mathf.Lerp(1f, 0.55f, d / r);
+                        tex.SetPixel(x, y, new Color(0.55f * k + 0.25f, 0.95f * k, 0.95f * k, 1f));
+                    }
+                }
+            }
+            else // closed bud
+            {
+                for (int y = -2; y <= 2; y++)
+                for (int x = -1; x <= 1; x++)
+                    tex.SetPixel(size / 2 + x, (int)(size * 0.38f) + y, new Color(0.40f, 0.72f, 0.70f, 1f));
             }
             Save(tex, name);
         }
@@ -533,6 +590,94 @@ namespace AnimalFarm.EditorTools
             }
             Save(tex, name);
         }
+
+        // ---- shepherd pose writers (muscle 01) ------------------------------
+
+        private enum PoseKind { Side, Up, Down }
+
+        /// <summary>Writes side/up/down body + head PNGs for one skin
+        /// (names: shepherd_body{alt}{,_up,_down}, shepherd_head{alt}{,_up,_down}).</summary>
+        private static void WriteShepherdPoses(string altTag, Color bodyC, Color skinC, Color hairC)
+        {
+            var poses = new[] { PoseKind.Side, PoseKind.Up, PoseKind.Down };
+            foreach (var pose in poses)
+            {
+                string tag = pose == PoseKind.Up ? "_up" : pose == PoseKind.Down ? "_down" : "";
+                Save(ShepherdBodyTex(bodyC, pose), "shepherd_body" + altTag + tag);
+                Save(ShepherdHeadTex(skinC, hairC, pose), "shepherd_head" + altTag + tag);
+            }
+        }
+
+        private static Texture2D ShepherdBodyTex(Color c, PoseKind pose)
+        {
+            var tex = SoftRectTex(40, 56, c, 0.45f);
+            var dark = new Color(c.r * 0.7f, c.g * 0.7f, c.b * 0.7f, 1f);
+            var leather = new Color(0.45f, 0.33f, 0.22f, 1f);
+
+            switch (pose)
+            {
+                case PoseKind.Down:
+                    PaintMask(tex, (x, y) => x >= 19 && x <= 20 && y >= 24, dark);              // open-cloak seam
+                    break;
+                case PoseKind.Up:
+                    PaintEllipse(tex, 20f, 46f, 13f, 9f, dark);                                  // hood
+                    PaintMask(tex, (x, y) => x >= 25 && x <= 35 && y >= 8 && y <= 19, leather);  // satchel
+                    break;
+                default:
+                    PaintEllipse(tex, 20f, 30f, 6.5f, 12f, dark);                                // near arm
+                    break;
+            }
+
+            PaintMask(tex, (x, y) => y >= 20 && y <= 23, leather);                               // belt (all poses)
+            return tex;
+        }
+
+        private static Texture2D ShepherdHeadTex(Color skin, Color hair, PoseKind pose)
+        {
+            var tex = CircleTex(30, skin);
+            var eye = new Color(0.12f, 0.10f, 0.18f, 1f);
+            var hairLit = new Color(hair.r * 1.15f, hair.g * 1.15f, hair.b * 1.15f, 1f);
+
+            switch (pose)
+            {
+                case PoseKind.Down:
+                    PaintMask(tex, (x, y) => y >= 23, hair);                                     // fringe
+                    PaintEllipse(tex, 10f, 14f, 1.9f, 2.4f, eye);
+                    PaintEllipse(tex, 20f, 14f, 1.9f, 2.4f, eye);
+                    break;
+                case PoseKind.Up:
+                    PaintMask(tex, (x, y) => y >= 5, hair);                                      // all hair from behind
+                    PaintEllipse(tex, 11f, 21f, 4f, 3f, hairLit);                                // highlight
+                    break;
+                default: // side, facing right (flipX carries left)
+                    PaintMask(tex, (x, y) => y >= 22 || x <= 11, hair);                          // fringe + back hair
+                    PaintEllipse(tex, 21f, 15f, 2f, 2.5f, eye);
+                    PaintEllipse(tex, 13f, 12f, 2.2f, 3.2f,
+                        new Color(skin.r * 0.82f, skin.g * 0.78f, skin.b * 0.74f, 1f));          // ear
+                    break;
+            }
+            return tex;
+        }
+
+        /// <summary>Paints a colour where the predicate holds, clipped to the sprite's own silhouette.</summary>
+        private static void PaintMask(Texture2D tex, System.Func<int, int, bool> mask, Color c)
+        {
+            for (int y = 0; y < tex.height; y++)
+            for (int x = 0; x < tex.width; x++)
+            {
+                var px = tex.GetPixel(x, y);
+                if (px.a < 0.5f || !mask(x, y)) continue;
+                float shade = Mathf.Lerp(0.9f, 1.08f, y / (float)tex.height);
+                tex.SetPixel(x, y, new Color(c.r * shade, c.g * shade, c.b * shade, px.a));
+            }
+        }
+
+        private static void PaintEllipse(Texture2D tex, float cx, float cy, float rx, float ry, Color c) =>
+            PaintMask(tex, (x, y) =>
+            {
+                float dx = (x - cx) / rx, dy = (y - cy) / ry;
+                return dx * dx + dy * dy <= 1f;
+            }, c);
 
         // ---- spirit blob writers (slice 03) --------------------------------
 

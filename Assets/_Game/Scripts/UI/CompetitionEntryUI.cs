@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text;
 using AnimalFarm.Competitions;
 using AnimalFarm.Core;
 using AnimalFarm.Spirits;
@@ -7,30 +9,50 @@ using UnityEngine.UI;
 namespace AnimalFarm.UI
 {
     /// <summary>
-    /// The competition entry modal (slice 05). Opened by the CompetitionBoard:
-    /// pick an event (Boulder Trial or The Crossing), pick a difficulty, pick a
-    /// resident, and the competition manager takes it from there. Gameplay
-    /// input is blocked while open (DebugConsole pattern). The panel shell is
-    /// built once; the rows are rebuilt on every Open.
+    /// The competition notice modal. Competitions are HELD (owner verdict
+    /// 2026-10-01), so this is a read-only schedule: the next festival events on
+    /// the underworld calendar, who is competing (placeholder rival shepherds and
+    /// their spirits), and which of the player's residents "could enter". There is
+    /// no entry path - the competition code itself stays reachable through the
+    /// debug console ('compete'). Gameplay input is blocked while open
+    /// (DebugConsole pattern). The panel shell is built once; the rows are
+    /// rebuilt on every Open.
     /// </summary>
     public class CompetitionEntryUI : MonoBehaviour
     {
         public static CompetitionEntryUI Instance { get; private set; }
 
-        /// <summary>Difficulty picked on the most recent entry (0..2). The board reads this for prizes.</summary>
+        /// <summary>Difficulty of the most recent debug-console run (0..2). The board reads this for prizes.</summary>
         public static int LastDifficulty;
 
-        private static readonly string[] EventNames = { "Boulder Trial", "The Crossing" };
-        private static readonly string[] DifficultyNames = { "Gentle Slope", "Proper Hill", "The Mountain" };
+        private const int UpcomingShown = 3;
+        private const int ResidentsShown = 4;
 
-        /// <summary>Entry fee in obols per difficulty (slice 09 economy). Same for both events.</summary>
+        private static readonly string[] DifficultyNames = { "Gentle Slope", "Proper Hill", "The Mountain" };
+        private static readonly string[] SprintDifficultyNames = { "Easy Stroll", "Brisk Dash", "Breakneck" };
+
+        /// <summary>Difficulty labels keyed by the event format ("Sprint" has its own set).</summary>
+        private static string[] NamesFor(string format) =>
+            format == "Sprint" ? SprintDifficultyNames : DifficultyNames;
+
+        /// <summary>Entry fee in obols per difficulty (slice 09 economy). Same for both formats.</summary>
         private static readonly int[] EntryFees = { 5, 10, 20 };
+
+        /// <summary>The entry fee for a difficulty tier (the board stores it with the entry for refunds).</summary>
+        public static int FeeFor(int difficulty) => EntryFees[Mathf.Clamp(difficulty, 0, EntryFees.Length - 1)];
 
         private GameObject _panel;
         private RectTransform _content; // rows rebuilt each Open
+        private Text _title;
         private Text _status;           // transient feedback line ("needs N obols")
         private bool _open;
-        private int _selectedEvent;     // 0 = Boulder Trial, 1 = The Crossing
+        private bool _holdingLock;      // we set ModalOpen + blocked gameplay
+
+        // entry mode (festival day)
+        private bool _entryMode;
+        private SpiritAgent _entrySpirit;
+        private int _entryIndex;
+        private CompetitionBoard _entryBoard;
         private int _selectedDifficulty;
 
         private void Awake()
@@ -44,21 +66,45 @@ namespace AnimalFarm.UI
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>Opens the entry modal (no-op while an event runs).</summary>
+        /// <summary>Opens the read-only notices page (no-op while an event runs).</summary>
         public void Open()
         {
             if (_open) return;
+            _entryMode = false;
+            Show();
+        }
+
+        /// <summary>
+        /// Opens the festival entry page for one following spirit: the scheduled event
+        /// fixes the format, the player picks a difficulty and pays the fee.
+        /// </summary>
+        public void OpenEntry(SpiritAgent spirit, int eventIndex, CompetitionBoard board)
+        {
+            if (_open || spirit == null || board == null) return;
+            _entryMode = true;
+            _entrySpirit = spirit;
+            _entryIndex = eventIndex;
+            _entryBoard = board;
+            _selectedDifficulty = 0;
+            Show();
+        }
+
+        private void Show()
+        {
             if (CompetitionManager.Instance == null || CompetitionManager.Instance.EventRunning) return;
             if (_panel == null) BuildPanel();
 
-            _selectedEvent = 0; // default: Boulder Trial
-            _selectedDifficulty = 0;
             RebuildContent();
 
             _panel.SetActive(true);
             _panel.transform.SetAsLastSibling(); // render above the HUD
             _open = true;
 
+            if (!_holdingLock)
+            {
+                _holdingLock = true;
+                UIInputLock.ModalOpen = true;
+            }
             if (GameInput.Instance != null)
                 GameInput.Instance.SetGameplayBlocked(true);
         }
@@ -68,23 +114,50 @@ namespace AnimalFarm.UI
             if (!_open) return;
 
             _open = false;
+            _entrySpirit = null;
+            _entryBoard = null;
             if (_panel != null) _panel.SetActive(false);
+            ReleaseLock();
+        }
+
+        /// <summary>Gives input back, unless the pause menu, a ceremony or a text field still needs it blocked.</summary>
+        private void ReleaseLock()
+        {
+            if (_holdingLock)
+            {
+                _holdingLock = false;
+                // A running ceremony owns the modal flag and the input block.
+                if (!UIInputLock.CeremonyActive) UIInputLock.ModalOpen = false;
+            }
 
             if (GameInput.Instance != null)
             {
-                // Don't hand input back if the pause menu still needs it blocked.
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.AnyOwnerHolds) GameInput.Instance.SetGameplayBlocked(false);
             }
         }
 
-        private void PickSpirit(SpiritAgent spirit)
+        private void ConfirmEntry()
         {
+            var spirit = _entrySpirit;
+            var board = _entryBoard;
             int difficulty = _selectedDifficulty;
-            int chosenEvent = _selectedEvent;
+            int eventIndex = _entryIndex;
+            if (spirit == null || board == null || spirit.State != SpiritState.Resident) { Close(); return; }
+
+            // It may have wandered off while the page was open: no fee, keep the page.
+            if (!spirit.IsFollowing)
+            {
+                if (_status != null)
+                {
+                    _status.text = "(it wandered off - bring it back)";
+                    _status.color = UIStyle.Danger;
+                }
+                return;
+            }
 
             // Entry fee first (slice 09 economy): no obols, no entry.
-            int fee = EntryFees[Mathf.Clamp(difficulty, 0, EntryFees.Length - 1)];
+            int fee = FeeFor(difficulty);
             if (Inventory.Instance == null || !Inventory.Instance.Consume("coin", fee))
             {
                 if (_status != null)
@@ -95,16 +168,10 @@ namespace AnimalFarm.UI
                 return; // stay open so the player can pick a cheaper tier
             }
 
-            LastDifficulty = difficulty;
-
             // Close (and restore input) FIRST - the manager re-blocks it itself.
             Close();
-
-            if (spirit == null || CompetitionManager.Instance == null) return;
-            if (chosenEvent == 1)
-                CompetitionManager.Instance.StartCrossing(spirit, difficulty);
-            else
-                CompetitionManager.Instance.StartBoulderTrial(spirit, difficulty);
+            if (!board.BeginFestivalEntry(spirit, eventIndex, difficulty))
+                Inventory.Instance.Add("coin", fee); // could not start: refund
         }
 
         // ------------------------------------------------------------------ UI
@@ -118,7 +185,7 @@ namespace AnimalFarm.UI
             panelRt.SetParent(root, false);
             panelRt.anchorMin = panelRt.anchorMax = new Vector2(0.5f, 0.5f);
             panelRt.pivot = new Vector2(0.5f, 0.5f);
-            panelRt.sizeDelta = new Vector2(420f, 120f); // height grows via ContentSizeFitter
+            panelRt.sizeDelta = new Vector2(760f, 120f); // height grows via ContentSizeFitter
 
             var bg = _panel.AddComponent<Image>();
             UIStyle.ApplyPanel(bg, UIStyle.PanelBg);
@@ -137,7 +204,8 @@ namespace AnimalFarm.UI
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             var title = UIRoot.MakeText(panelRt, "Title", 34, TextAnchor.MiddleCenter, UIStyle.Cream);
-            title.text = "Competitions";
+            title.text = "Competition Notices";
+            _title = title;
             title.rectTransform.sizeDelta = new Vector2(0f, 48f);
 
             // Rows live in a nested column so the shell survives rebuilds.
@@ -145,7 +213,7 @@ namespace AnimalFarm.UI
             _content.SetParent(panelRt, false);
 
             var contentLayout = _content.gameObject.AddComponent<VerticalLayoutGroup>();
-            contentLayout.spacing = 10f;
+            contentLayout.spacing = 8f;
             contentLayout.childAlignment = TextAnchor.UpperCenter;
             contentLayout.childControlWidth = true;
             contentLayout.childControlHeight = false;
@@ -162,79 +230,56 @@ namespace AnimalFarm.UI
         {
             for (int i = _content.childCount - 1; i >= 0; i--)
                 Destroy(_content.GetChild(i).gameObject);
+            _status = null;
 
-            BuildCoinsLine();
-            BuildEventRow();
-            BuildDifficultyRow();
-            BuildFeeLine();
-            BuildSpiritRows();
-            BuildStatusLine();
-            MakeButton(_content, "Never mind", 56f, false, Close);
+            if (_entryMode)
+            {
+                RebuildEntry();
+                return;
+            }
+
+            if (_title != null) _title.text = "Competition Notices";
+
+            // A festival day (entries open, result, or the entry window times) replaces the held line.
+            var board = CompetitionBoard.Instance;
+            string today = board != null ? board.TodayStatusLine() : null;
+            if (!string.IsNullOrEmpty(today))
+                AddLine(today, 20, UIStyle.Gold, 52f, TextAnchor.MiddleCenter);
+            else
+                AddLine(CompetitionSchedule.HeldLine, 20, UIStyle.Gold, 28f, TextAnchor.MiddleCenter);
+
+            var cal = GameCalendar.Instance;
+            if (cal != null)
+                AddLine("Today: " + cal.DateLine, 18, UIStyle.Grey, 24f, TextAnchor.MiddleCenter);
+
+            BuildUpcoming();
+            BuildCouldEnter();
+            MakeButton(_content, "Close", 56f, false, Close);
         }
 
-        /// <summary>Small grey obol balance under the title, refreshed on open.</summary>
-        private void BuildCoinsLine()
+        /// <summary>Festival entry page: event, spirit, difficulty, fee, Enter / Never mind.</summary>
+        private void RebuildEntry()
         {
+            var ev = CompetitionSchedule.Get(_entryIndex);
+            if (_title != null) _title.text = ev.name;
+
+            var cal = GameCalendar.Instance;
+            string when = cal != null ? cal.DateLine : "today";
+            AddLine(ev.format + " - " + when, 20, UIStyle.Gold, 28f, TextAnchor.MiddleCenter);
+
+            string species = _entrySpirit != null && _entrySpirit.Species != null ? _entrySpirit.Species.displayName : "Spirit";
+            string name = _entrySpirit != null && !string.IsNullOrEmpty(_entrySpirit.GivenName) ? _entrySpirit.GivenName : species;
+            AddLine("Entering: " + name + " (" + species + ", Spirit "
+                + (_entrySpirit != null ? Mathf.RoundToInt(_entrySpirit.Spirit) : 0) + "%)",
+                20, UIStyle.Cream, 28f, TextAnchor.MiddleCenter);
+
             int obols = Inventory.Instance != null ? Inventory.Instance.Count("coin") : 0;
-            var text = UIRoot.MakeText(_content, "Obols", 19, TextAnchor.MiddleCenter, UIStyle.Grey);
-            text.text = "Obols: " + obols;
-            text.rectTransform.sizeDelta = new Vector2(0f, 26f);
-        }
+            AddLine("Obols: " + obols, 19, UIStyle.Grey, 26f, TextAnchor.MiddleCenter);
 
-        /// <summary>Grey entry-fee line under the difficulty row; tracks the selection.</summary>
-        private void BuildFeeLine()
-        {
-            int fee = EntryFees[Mathf.Clamp(_selectedDifficulty, 0, EntryFees.Length - 1)];
-            var text = UIRoot.MakeText(_content, "Fee", 19, TextAnchor.MiddleCenter, UIStyle.Grey);
-            text.text = "Entry: " + fee + " obols";
-            text.rectTransform.sizeDelta = new Vector2(0f, 26f);
-        }
-
-        /// <summary>Empty until a pick fails (e.g. "(needs 10 obols)").</summary>
-        private void BuildStatusLine()
-        {
-            _status = UIRoot.MakeText(_content, "Status", 20, TextAnchor.MiddleCenter, UIStyle.Danger);
-            _status.text = "";
-            _status.rectTransform.sizeDelta = new Vector2(0f, 26f);
-        }
-
-        private void BuildEventRow()
-        {
-            // Which sport: Boulder Trial (Vigor's game) or The Crossing
-            // (Grace's race). Same toggle styling as the difficulty row.
-            var row = MakeToggleRow("EventRow");
-
-            for (int i = 0; i < EventNames.Length; i++)
-            {
-                int ev = i; // capture for the click closure
-                MakeButton(row, EventNames[i], 46f, ev == _selectedEvent,
-                    () => { _selectedEvent = ev; RebuildContent(); }, 19);
-            }
-        }
-
-        private void BuildDifficultyRow()
-        {
-            var row = MakeToggleRow("DifficultyRow");
-
-            for (int i = 0; i < DifficultyNames.Length; i++)
-            {
-                int diff = i; // capture for the click closure
-                MakeButton(row, DifficultyNames[i], 46f, diff == _selectedDifficulty,
-                    () => { _selectedDifficulty = diff; RebuildContent(); }, 19);
-            }
-        }
-
-        /// <summary>
-        /// Fixed-height row of equal-width toggle buttons; the layout group
-        /// splits the width and the smaller font keeps the labels inside them
-        /// (they were overlapping at 1080p).
-        /// </summary>
-        private RectTransform MakeToggleRow(string name)
-        {
-            var row = new GameObject(name).AddComponent<RectTransform>();
+            // difficulty toggles
+            var row = new GameObject("DifficultyRow").AddComponent<RectTransform>();
             row.SetParent(_content, false);
             row.sizeDelta = new Vector2(0f, 46f);
-
             var rowLayout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             rowLayout.spacing = 10f;
             rowLayout.childAlignment = TextAnchor.MiddleCenter;
@@ -242,16 +287,72 @@ namespace AnimalFarm.UI
             rowLayout.childControlHeight = true;
             rowLayout.childForceExpandWidth = true;
             rowLayout.childForceExpandHeight = true;
+            var diffNames = NamesFor(ev.format);
+            for (int i = 0; i < diffNames.Length; i++)
+            {
+                int diff = i; // capture for the click closure
+                MakeButton(row, diffNames[i], 46f, diff == _selectedDifficulty,
+                    () => { _selectedDifficulty = diff; RebuildContent(); }, 19);
+            }
 
-            return row;
+            int fee = EntryFees[Mathf.Clamp(_selectedDifficulty, 0, EntryFees.Length - 1)];
+            AddLine("Entry: " + fee + " obols", 19, UIStyle.Grey, 26f, TextAnchor.MiddleCenter);
+
+            _status = UIRoot.MakeText(_content, "Status", 20, TextAnchor.MiddleCenter, UIStyle.Danger);
+            _status.text = "";
+            _status.rectTransform.sizeDelta = new Vector2(0f, 26f);
+
+            MakeButton(_content, "Enter " + name, 56f, true, ConfirmEntry);
+            MakeButton(_content, "Never mind", 56f, false, Close);
         }
 
-        private void BuildSpiritRows()
+        /// <summary>One text row; the caller passes a height that fits its line count.</summary>
+        private void AddLine(string text, int size, Color color, float height,
+            TextAnchor anchor = TextAnchor.UpperLeft)
         {
-            int listed = 0;
+            var t = UIRoot.MakeText(_content, "Line", size, anchor, color);
+            t.text = text;
+            t.rectTransform.sizeDelta = new Vector2(0f, height);
+        }
+
+        private void BuildUpcoming()
+        {
+            var next = CompetitionSchedule.NextEvents(UpcomingShown);
+            if (next.Count == 0)
+            {
+                AddLine("(the festival calendar is not posted yet)", 20, UIStyle.Grey, 30f, TextAnchor.MiddleCenter);
+                return;
+            }
+
+            AddLine("Coming up", 22, UIStyle.Cream, 30f);
+
+            string gold = ColorUtility.ToHtmlStringRGB(UIStyle.Gold);
+            string grey = ColorUtility.ToHtmlStringRGB(UIStyle.Grey);
+            for (int i = 0; i < next.Count; i++)
+            {
+                var ev = next[i];
+                var sb = new StringBuilder();
+                sb.Append("<color=#").Append(gold).Append('>').Append(ev.festival.name)
+                  .Append("</color>  (").Append(ev.festival.format).Append(")\n");
+                sb.Append(ev.seasonName).Append(", Day ").Append(ev.festival.dayOfSeason)
+                  .Append(" - ").Append(CompetitionSchedule.CountdownText(ev.daysUntil)).Append('\n');
+                for (int r = 0; r < CompetitionSchedule.RivalsPerEvent; r++)
+                {
+                    var rival = CompetitionSchedule.GetRival(ev.index, r);
+                    sb.Append("  ").Append(rival.shepherd).Append(" & ").Append(rival.species)
+                      .Append(" <color=#").Append(grey).Append(">- ").Append(rival.flavor).Append("</color>");
+                    if (r < CompetitionSchedule.RivalsPerEvent - 1) sb.Append('\n');
+                }
+                AddLine(sb.ToString(), 18, UIStyle.Cream, 24f * (2 + CompetitionSchedule.RivalsPerEvent));
+            }
+        }
+
+        private void BuildCouldEnter()
+        {
             var manager = SpiritManager.Instance;
             var spirits = manager != null ? manager.AllSpirits : null;
 
+            var lines = new List<string>();
             if (spirits != null)
             {
                 for (int i = 0; i < spirits.Count; i++)
@@ -259,23 +360,25 @@ namespace AnimalFarm.UI
                     var agent = spirits[i];
                     if (agent == null || agent.State != SpiritState.Resident) continue;
 
-                    string name = !string.IsNullOrEmpty(agent.GivenName)
-                        ? agent.GivenName
-                        : (agent.Species != null ? agent.Species.displayName : "Spirit");
-                    string label = name + " - Spirit " + Mathf.RoundToInt(agent.Spirit) + "%";
-
-                    var picked = agent; // capture for the click closure
-                    MakeButton(_content, label, 56f, false, () => PickSpirit(picked));
-                    listed++;
+                    string species = agent.Species != null ? agent.Species.displayName : "Spirit";
+                    string name = !string.IsNullOrEmpty(agent.GivenName) ? agent.GivenName : species;
+                    lines.Add(name + " (" + species + ", Spirit " + Mathf.RoundToInt(agent.Spirit) + "%)");
                 }
             }
 
-            if (listed == 0)
+            AddLine("Your residents who could enter", 22, UIStyle.Cream, 30f);
+
+            if (lines.Count == 0)
             {
-                var empty = UIRoot.MakeText(_content, "Empty", 22, TextAnchor.MiddleCenter, UIStyle.Grey);
-                empty.text = "(no residents to enter)";
-                empty.rectTransform.sizeDelta = new Vector2(0f, 36f);
+                AddLine("  (no residents yet)", 18, UIStyle.Grey, 24f);
+                return;
             }
+
+            int shown = Mathf.Min(lines.Count, ResidentsShown);
+            for (int i = 0; i < shown; i++)
+                AddLine("  " + lines[i], 18, UIStyle.Cream, 24f);
+            if (lines.Count > shown)
+                AddLine("  ...and " + (lines.Count - shown) + " more", 18, UIStyle.Grey, 24f);
         }
 
         private static void MakeButton(Transform parent, string label, float height, bool gold,

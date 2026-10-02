@@ -89,6 +89,7 @@ namespace AnimalFarm.Spirits
         private bool _finished;
         private bool _pauseHooked;
         private Headstone _stone;
+        private int _witnessCount;
 
         private Vector3 PadCenter => _pad != null ? _pad.PlatformCenter : transform.position;
         private Vector3 RiverRest => PadCenter + new Vector3(0f, -1.9f, 0f);
@@ -98,6 +99,16 @@ namespace AnimalFarm.Spirits
         public static void Begin(AscensionPad pad, SpiritAgent spirit)
         {
             if (Running || pad == null || spirit == null || !spirit.IsFulfilled) return;
+
+            // Never two ceremonies at once (a naming or weave rite is playing).
+            if (NamingCeremony.Running || WeaveRiteCeremony.Running)
+            {
+                Debug.Log("[Styx] Crossing refused: another ceremony is playing.");
+                Bleeps.Play(BleepKind.Denied, 0.8f);
+                FloatingText.Show(pad.PlatformCenter + Vector3.up * 1.4f,
+                    "(not now)", UIStyle.Grey);
+                return;
+            }
 
             var go = new GameObject("StyxCrossing");
             go.transform.position = pad.PlatformCenter;
@@ -551,7 +562,10 @@ namespace AnimalFarm.Spirits
 
             Vector3 drop = PadCenter + new Vector3(0f, -1.05f, 0f);
             if (HeadstoneRegistry.Instance != null)
+            {
                 _stone = HeadstoneRegistry.Instance.CreateHeadstoneAt(_spirit, drop);
+                if (_stone != null) _stone.Witnesses = _witnessCount;
+            }
 
             if (SpiritManager.Instance != null)
                 SpiritManager.Instance.Ascend(_spirit);
@@ -581,22 +595,25 @@ namespace AnimalFarm.Spirits
             _pools.Clear();
             if (_pad != null) _pad.SetCeremonyLift(false);
 
+            _witnessCount = _gathered.Count;
             foreach (var g in _gathered)
                 if (g != null) g.ExitCeremony();
             _gathered.Clear();
 
             CommitCrossing();
 
-            // Modal restore, pause-respecting (HomePickerUI pattern).
+            // Modal restore, pause-respecting (HomePickerUI pattern). Running goes
+            // false first so the owner check below does not count this ceremony.
+            Running = false;
             UIInputLock.ModalOpen = false;
             if (GameInput.Instance != null)
             {
                 bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                if (!paused && !UIInputLock.NonModalOwnerHolds) GameInput.Instance.SetGameplayBlocked(false);
             }
-            Running = false;
 
             HeadstoneHandoff();
+            NamingCeremony.TryStartPending(); // a naming queued behind the crossing goes now
 
             Destroy(gameObject); // overlay, river, Charon, orbs all ride this root
         }
@@ -628,6 +645,7 @@ namespace AnimalFarm.Spirits
                 {
                     if (stone == null) return;
                     stone.transform.position = world;
+                    stone.MarkPlaced(); // the garden's clock starts here
                     Bleeps.Play(BleepKind.Build, 0.6f);
                 });
         }
@@ -658,11 +676,12 @@ namespace AnimalFarm.Spirits
                 foreach (var g in _gathered)
                     if (g != null) g.ExitCeremony();
                 if (_pad != null) _pad.SetCeremonyLift(false);
+                Running = false;
                 UIInputLock.ModalOpen = false;
                 if (GameInput.Instance != null
-                    && (GameManager.Instance == null || !GameManager.Instance.IsPaused))
+                    && (GameManager.Instance == null || !GameManager.Instance.IsPaused)
+                    && !UIInputLock.NonModalOwnerHolds)
                     GameInput.Instance.SetGameplayBlocked(false);
-                Running = false;
             }
         }
 
@@ -790,6 +809,7 @@ namespace AnimalFarm.Spirits
         private static void PlayCharonChord()
         {
             if (Bleeps.Muted || !Application.isPlaying) return;
+            if (!AudioGuard.TryPlay(AudioBus.Sfx, "charon_chord", 1f, 1f)) return; // central gate
 
             if (_chord == null)
             {

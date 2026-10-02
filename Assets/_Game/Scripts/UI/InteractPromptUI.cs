@@ -6,13 +6,21 @@ using UnityEngine.UI;
 namespace AnimalFarm.UI
 {
     /// <summary>
-    /// Bottom-center prompt ("[E / Ⓐ] Inspect") shown while the shepherd is
-    /// focusing an interactable. Driven by InteractionSensor.FocusChanged.
+    /// Bottom-center prompt ("[E] Options", "[E] Pull", ...) shown while the
+    /// shepherd is focusing an interactable. Driven by InteractionSensor.FocusChanged
+    /// and refreshed a few times a second (the menu may gain or lose actions).
+    /// Selectable targets read "Options" (E opens their menu) or the label of
+    /// their single action (E runs it directly); the rest show their PromptText.
+    /// Hidden while the context menu is open.
     /// </summary>
     public class InteractPromptUI : MonoBehaviour
     {
+        private const float RefreshSeconds = 0.25f;
+
         private Text _prompt;
         private bool _subscribed;
+        private IInteractable _focus;
+        private float _refreshTimer;
 
         private void Start()
         {
@@ -40,15 +48,41 @@ namespace AnimalFarm.UI
 
         private void OnFocusChanged(IInteractable focus)
         {
+            _focus = focus;
+            _refreshTimer = 0f;
+            Refresh();
+        }
+
+        private void Update()
+        {
+            if (_focus == null || _prompt == null) return;
+
+            _refreshTimer -= Time.unscaledDeltaTime;
+            if (_refreshTimer > 0f) return;
+            _refreshTimer = RefreshSeconds;
+            Refresh();
+        }
+
+        private void Refresh()
+        {
             if (_prompt == null) return;
 
-            if (focus == null)
+            bool dead = _focus == null || (_focus is Object o && o == null);
+            var menu = SelectionMenuUI.Instance;
+            if (dead || (menu != null && menu.IsOpen))
             {
                 _prompt.gameObject.SetActive(false);
                 return;
             }
 
-            _prompt.text = "[E] " + focus.PromptText;
+            string text = InteractMenu.PromptFor(_focus);
+            if (string.IsNullOrEmpty(text))
+            {
+                _prompt.gameObject.SetActive(false);
+                return;
+            }
+
+            _prompt.text = "[E] " + text;
             _prompt.gameObject.SetActive(true);
         }
 

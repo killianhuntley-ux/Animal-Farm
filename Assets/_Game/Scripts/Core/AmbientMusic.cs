@@ -174,7 +174,8 @@ namespace AnimalFarm.Core
             bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
             _pauseSoft = Mathf.MoveTowards(_pauseSoft, paused ? PausedLevel : 1f, dt / 0.6f);
 
-            float master = (Bleeps.Muted ? 0f : 1f) * MusicVolume * _duck * _pauseSoft;
+            float master = (Bleeps.Muted ? 0f : 1f) * (AudioGuard.IsAudible(AudioBus.Music) ? 1f : 0f)
+                * MusicVolume * _duck * _pauseSoft;
 
             // A mood flip (dawn/dusk, season roll) pulls the next phrase in
             // close so the bed answers within a couple of seconds.
@@ -213,6 +214,13 @@ namespace AnimalFarm.Core
 
         private void StartNextPhrase()
         {
+            // Central gate (muted/soloed-away bus: retry in a couple of seconds).
+            if (!AudioGuard.TryPlay(AudioBus.Music, "pad", PadPeak, 0f))
+            {
+                _nextPhraseAt = Time.unscaledTime + 2f;
+                return;
+            }
+
             bool night = GameClock.Instance != null && GameClock.Instance.IsNight;
             int season = GameCalendar.Instance != null ? GameCalendar.Instance.SeasonIndex : 0;
             int transpose = SeasonTranspose[((season % SeasonTranspose.Length)
@@ -273,17 +281,21 @@ namespace AnimalFarm.Core
             for (int n = 0; n < chord.Length; n++)
             {
                 float f = rootHz * Mathf.Pow(2f, chord[n] / 12f);
-                float p0 = 0f, p1 = 0f, p2 = 0f; // phase accumulators
-                float w0 = 2f * Mathf.PI * f / PadSampleRate;
-                float w1 = 2f * Mathf.PI * f * 1.004f / PadSampleRate; // gentle detune
-                float w2 = 2f * Mathf.PI * f * 2f / PadSampleRate;     // octave shimmer
+                // Phase accumulators in double, wrapped modulo 2*PI (no float drift over 12 s).
+                const double TwoPi = 2.0 * System.Math.PI;
+                double p0 = 0.0, p1 = 0.0, p2 = 0.0;
+                double w0 = TwoPi * f / PadSampleRate;
+                double w1 = TwoPi * f * 1.004 / PadSampleRate; // gentle detune
+                double w2 = TwoPi * f * 2.0 / PadSampleRate;   // octave shimmer
 
                 for (int i = 0; i < samples; i++)
                 {
-                    p0 += w0; p1 += w1; p2 += w2;
-                    d[i] += noteGain * (0.5f * Mathf.Sin(p0)
-                                        + 0.5f * Mathf.Sin(p1)
-                                        + 0.25f * Mathf.Sin(p2));
+                    p0 += w0; if (p0 >= TwoPi) p0 -= TwoPi;
+                    p1 += w1; if (p1 >= TwoPi) p1 -= TwoPi;
+                    p2 += w2; if (p2 >= TwoPi) p2 -= TwoPi;
+                    d[i] += noteGain * (float)(0.5 * System.Math.Sin(p0)
+                                               + 0.5 * System.Math.Sin(p1)
+                                               + 0.25 * System.Math.Sin(p2));
                 }
             }
 
@@ -320,7 +332,9 @@ namespace AnimalFarm.Core
             int octave = 1 + rng.Next(2);
             float f = RootHz * Mathf.Pow(2f, (transpose + degree) / 12f) * Mathf.Pow(2f, octave);
 
-            _pluckSource.PlayOneShot(GetPluckClip(f), 0.5f + (float)rng.NextDouble() * 0.3f);
+            float pluckVol = 0.5f + (float)rng.NextDouble() * 0.3f;
+            if (AudioGuard.TryPlay(AudioBus.Music, "pluck", pluckVol, 0f))
+                _pluckSource.PlayOneShot(GetPluckClip(f), pluckVol);
 
             // Sparser at night. Silence between notes is good.
             float wait = night

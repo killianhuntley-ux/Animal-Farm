@@ -47,7 +47,20 @@ namespace AnimalFarm.Debugging
         private void OnConsoleToggled()
         {
             _open = !_open;
-            UIInputLock.TextInputActive = _open; // console keystrokes must never reach gameplay
+            // Console keystrokes must never reach gameplay. On close, hand the flag
+            // back only to a text field that is actually still focused (a stale
+            // snapshot from open time could leave it stuck on or off).
+            if (_open)
+            {
+                UIInputLock.TextInputActive = true;
+            }
+            else
+            {
+                var prompt = AnimalFarm.UI.NamePromptUI.Instance;
+                var info = AnimalFarm.UI.SpiritInfoUI.Instance;
+                UIInputLock.TextInputActive = (prompt != null && prompt.IsTyping)
+                                              || (info != null && info.IsRenaming);
+            }
 
             if (GameInput.Instance != null)
             {
@@ -57,9 +70,11 @@ namespace AnimalFarm.Debugging
                 }
                 else
                 {
-                    // Don't hand input back if the pause menu still needs it blocked.
+                    // Don't hand input back if the pause menu, a modal, another text
+                    // field or a ceremony still needs it blocked (TextInputActive was
+                    // just restored above, so AnyOwnerHolds sees the real state).
                     bool paused = GameManager.Instance != null && GameManager.Instance.IsPaused;
-                    if (!paused) GameInput.Instance.SetGameplayBlocked(false);
+                    if (!paused && !UIInputLock.AnyOwnerHolds) GameInput.Instance.SetGameplayBlocked(false);
                 }
             }
 
@@ -152,27 +167,46 @@ namespace AnimalFarm.Debugging
                     Print("tp <x> <y>      - teleport player");
                     Print("save            - save the game");
                     Print("load            - load the save");
-                    Print("spawn <id>      - force-spawn a spirit as visitor");
+                    Print("spawn <id>      - force-spawn a spirit as visitor (it still needs its gates; use 'stay' to push it to join)");
                     Print("spirits         - list all spirit agents");
                     Print("inv             - list inventory items");
                     Print("coins [n]       - add coins (default 50)");
                     Print("grow            - force-mature all plants");
                     Print("weed            - force-spawn a weed near the player");
                     Print("weeds           - list live weeds (age and cell)");
-                    Print("villain <kind>  - force a villain visit (digger|devourer|scarer)");
+                    Print("villain [kind]  - show this season's villain mix; with digger|devourer|scarer force a visit");
                     Print("blessing [name] - fill a resident's spirit (name or 'all'; default all)");
                     Print("taskdone [name] - complete a resident's final wish (name or 'all')");
                     Print("resident <id> [name] - instantly spawn a named RESIDENT of a species");
+                    Print("naming [id] [name] - play the naming ceremony (id = spawn a fresh resident; name = suggestion)");
+                    Print("mood <0-100|happy|neutral|sad> [name|all] - set resident Spirit (posture + pace follow)");
+                    Print("silhouette <id> - spawn a pinned silhouette 5 units away (test the shy fade-back)");
                     Print("ready [name]    - make resident(s) ascension-ready (spirit+task+home)");
-                    Print("compete [0|1|2] - enter the first resident in a Boulder Trial");
+                    Print("compete [race] [0|1|2] - enter the first resident in a Boulder Trial (or the sprint) directly");
+                    Print("festival [now|clear|reset] - force today to be a festival day (board entry mode, any hour), forget today's entry; no argument = status");
                     Print("weave           - weave the first recipe-matching resident pair");
                     Print("gentle [on|off] - set/toggle Gentle Passage (disables the Repo-man)");
-                    Print("repo            - dispatch the Repo-man at a runaway now");
-                    Print("parcel <0|1>    - force-open a land parcel (no cost; bypasses the Ferryman)");
+                    Print("repo [sub]      - dispatch the Repo-man at a runaway now; sub: runaway | skipwarn | price | bribes <n>");
+                    Print("parcel <0|1>    - force-open a land parcel (no cost; bypasses the Land Office)");
                     Print("guide           - show the current guide-light objective");
                     Print("skipguide       - skip the guide-light onboarding");
                     Print("bleep [kind]    - audio self-test; play a bleep (default Click)");
+                    Print("audio           - audio status (bus mute/solo, recent plays, limiter peak, diag file)");
+                    Print("audio mute <music|ambience|sfx|voice|all> / audio unmute / audio solo <bus>");
+                    Print("audio log       - last 30 audio guard entries (Ctrl+M = panic kill all audio)");
                     Print("tooltier <tool> <1-3> - set a tool's upgrade tier (e.g. tooltier Hoe 3)");
+                    foreach (var identityLine in IdentityDebugCommands.HelpLines) Print(identityLine);
+                    foreach (var weaveLine in WeaveDebugCommands.HelpLines) Print(weaveLine);
+                    foreach (var frontierLine in FrontierDebugCommands.HelpLines) Print(frontierLine);
+                    foreach (var stayLine in StayDebugCommands.HelpLines) Print(stayLine); // muscle 11: visitors decide to stay
+                    foreach (var gardenLine in GardenDebugCommands.HelpLines) Print(gardenLine); // muscle 04 memorial garden
+                    foreach (var landLine in LandDebugCommands.HelpLines) Print(landLine); // living land: mud / wading / sway
+                    Print("flood [on|off]  - force the rain pond-flood on/off (recedes ~3 game-hours after rain)");
+                    Print("compost [n]     - add n compost (default 5)");
+                    Print("leaving         - drop a compost leaving near the player");
+                    Print("seeds [n]       - add n of every seed packet incl. reed + glowcap lily (default 5)");
+                    Print("quality <normal|fine|gleaming> - pin every plant's harvest tier");
+                    Print("sit [status]    - toggle sit & rest (bypasses gates), or print rest status");
                     break;
 
                 case "time":
@@ -193,6 +227,30 @@ namespace AnimalFarm.Debugging
 
                 case "tooltier":
                     CmdToolTier(args);
+                    break;
+
+                case "flood":
+                    CmdFlood(args);
+                    break;
+
+                case "compost":
+                    CmdCompost(args);
+                    break;
+
+                case "leaving":
+                    CmdLeaving();
+                    break;
+
+                case "seeds":
+                    CmdSeeds(args);
+                    break;
+
+                case "quality":
+                    CmdQuality(args);
+                    break;
+
+                case "sit":
+                    CmdSit(args);
                     break;
 
                 case "ff":
@@ -258,8 +316,24 @@ namespace AnimalFarm.Debugging
                     CmdResident(args);
                     break;
 
+                case "naming":
+                    CmdNaming(args);
+                    break;
+
+                case "mood":
+                    CmdMood(args);
+                    break;
+
+                case "silhouette":
+                    CmdSilhouette(args);
+                    break;
+
                 case "ready":
                     CmdReady(args);
+                    break;
+
+                case "festival":
+                    CmdFestival(args);
                     break;
 
                 case "compete":
@@ -275,7 +349,7 @@ namespace AnimalFarm.Debugging
                     break;
 
                 case "repo":
-                    CmdRepo();
+                    CmdRepo(args);
                     break;
 
                 case "parcel":
@@ -294,7 +368,18 @@ namespace AnimalFarm.Debugging
                     CmdBleep(args);
                     break;
 
+                case "audio":
+                    CmdAudio(args);
+                    break;
+
                 default:
+                    // Muscle 05 identity commands (stats / traits / train / gym / bait / reroll).
+                    if (IdentityDebugCommands.TryRun(cmd, args, Print)) break;
+                    if (WeaveDebugCommands.TryRun(cmd, args, Print)) break; // muscle 06 weaving (weaveforce / recipes / rumor ...)
+                    if (FrontierDebugCommands.TryRun(cmd, args, Print)) break; // muscle 08 frontier (road / toll / ambush / mount ...)
+                    if (StayDebugCommands.TryRun(cmd, args, Print)) break; // muscle 11 stay decision (stay / staygate)
+                    if (GardenDebugCommands.TryRun(cmd, args, Print)) break; // muscle 04 memorial garden (garden stones / age / place)
+                    if (LandDebugCommands.TryRun(cmd, args, Print)) break; // living land (mudload / mudpatch / wade / gust)
                     Print("Unknown: " + cmd + " (try 'help')");
                     break;
             }
@@ -348,6 +433,7 @@ namespace AnimalFarm.Debugging
                           + " (rain " + Mathf.RoundToInt(def.rainWeight * 100f) + "%)"
                           + (i == calendar.SeasonIndex ? "  <- now" : ""));
                 }
+                Print("villains " + VillainManager.Debug_SeasonMixLine(calendar.SeasonIndex));
                 return;
             }
 
@@ -406,6 +492,16 @@ namespace AnimalFarm.Debugging
             }
 
             Print(name + " is now tier " + tools.GetToolTier(name) + ".");
+        }
+
+        private void CmdSit(string[] args)
+        {
+            var rest = AnimalFarm.Player.ShepherdRest.Instance;
+            if (rest == null) { Print("ShepherdRest not available."); return; }
+
+            if (args.Length < 2 || !string.Equals(args[1], "status", System.StringComparison.OrdinalIgnoreCase))
+                rest.Debug_Toggle();
+            Print("Rest: " + rest.Debug_Status());
         }
 
         private void CmdFastForward()
@@ -508,6 +604,91 @@ namespace AnimalFarm.Debugging
             Print("Added " + amount + " coin(s). Total: " + Inventory.Instance.Count("coin") + ".");
         }
 
+        private void CmdFlood(string[] args)
+        {
+            var flood = PondFlood.GetOrCreate();
+            if (flood == null) { Print("PondFlood not available."); return; }
+
+            bool value;
+            if (args.Length >= 2)
+            {
+                string arg = args[1].ToLowerInvariant();
+                if (arg == "on") value = true;
+                else if (arg == "off") value = false;
+                else { Print("Usage: flood [on|off]"); return; }
+            }
+            else
+            {
+                value = !flood.IsFlooded;
+            }
+
+            flood.Debug_SetFlood(value);
+            Print("Flood " + (value ? "ON (recedes ~3 game-hours after rain stops)" : "OFF") + ".");
+        }
+
+        private void CmdCompost(string[] args)
+        {
+            if (Inventory.Instance == null) { Print("Inventory not available."); return; }
+
+            int amount = 5;
+            if (args.Length >= 2 && (!int.TryParse(args[1], out amount) || amount <= 0))
+            {
+                Print("Usage: compost [n]");
+                return;
+            }
+
+            Inventory.Instance.Add(CompostManager.CompostId, amount);
+            Print("Added " + amount + " compost. Total: " + Inventory.Instance.Count(CompostManager.CompostId) + ".");
+        }
+
+        private void CmdLeaving()
+        {
+            var compost = CompostManager.GetOrCreate();
+            var player = GameObject.FindWithTag("Player");
+            if (compost == null || player == null) { Print("CompostManager or player not available."); return; }
+
+            compost.SpawnLeaving(player.transform.position + new Vector3(1.2f, 0f, 0f));
+            Print("Dropped a compost leaving beside the player.");
+        }
+
+        private void CmdSeeds(string[] args)
+        {
+            if (Inventory.Instance == null) { Print("Inventory not available."); return; }
+
+            int amount = 5;
+            if (args.Length >= 2 && (!int.TryParse(args[1], out amount) || amount <= 0))
+            {
+                Print("Usage: seeds [n]");
+                return;
+            }
+
+            string[] ids = { "seed_grass", "seed_palewheat", "seed_gravebloom", "seed_murkberry", "seed_reed", "seed_glowcaplily" };
+            for (int i = 0; i < ids.Length; i++) Inventory.Instance.Add(ids[i], amount);
+            Print("Added " + amount + " of each seed packet (grass, palewheat, gravebloom, murkberry, reed, glowcaplily).");
+        }
+
+        private void CmdQuality(string[] args)
+        {
+            if (PlantManager.Instance == null) { Print("PlantManager not available."); return; }
+
+            CropTier tier;
+            string arg = args.Length >= 2 ? args[1].ToLowerInvariant() : "";
+            if (arg == "normal") tier = CropTier.Normal;
+            else if (arg == "fine") tier = CropTier.Fine;
+            else if (arg == "gleaming") tier = CropTier.Gleaming;
+            else { Print("Usage: quality <normal|fine|gleaming>"); return; }
+
+            var plants = PlantManager.Instance.AllPlants;
+            int n = 0;
+            for (int i = 0; i < plants.Count; i++)
+            {
+                if (plants[i] == null || !plants[i].HasQuality) continue;
+                plants[i].Debug_SetTier(tier);
+                n++;
+            }
+            Print("Pinned " + n + " crop(s) to " + tier + " (water plants carry no quality).");
+        }
+
         private void CmdGrow()
         {
             if (PlantManager.Instance == null) { Print("PlantManager not available."); return; }
@@ -565,7 +746,9 @@ namespace AnimalFarm.Debugging
 
             if (args.Length < 2)
             {
-                Print("Usage: villain <digger|devourer|scarer>");
+                var cal = GameCalendar.Instance;
+                Print("This season's villain mix - " + VillainManager.Debug_SeasonMixLine(cal != null ? cal.SeasonIndex : 0));
+                Print("Usage: villain <digger|devourer|scarer>  (forces a visit)");
                 return;
             }
 
@@ -643,6 +826,85 @@ namespace AnimalFarm.Debugging
                 : "Unknown species: " + args[1]);
         }
 
+        /// <summary>
+        /// naming [id] [name]: plays the naming ceremony. With a species id a
+        /// fresh resident is spawned first (and left unnamed until the
+        /// ceremony names it); without one the resident nearest the shepherd
+        /// is used. The optional name pre-fills the (still editable) field.
+        /// </summary>
+        private void CmdNaming(string[] args)
+        {
+            if (SpiritManager.Instance == null) { Print("SpiritManager not available."); return; }
+            if (NamingCeremony.Running) { Print("A naming ceremony is already playing."); return; }
+
+            SpiritAgent target = null;
+            string suggestion = args.Length >= 3 ? args[2] : null;
+
+            if (args.Length >= 2)
+            {
+                target = SpiritManager.Instance.ForceSpawnResident(args[1].ToLowerInvariant(), "");
+                if (target == null) { Print("Unknown species: " + args[1]); return; }
+            }
+            else
+            {
+                var player = GameObject.FindWithTag("Player");
+                Vector3 from = player != null ? player.transform.position : Vector3.zero;
+                float best = float.MaxValue;
+                var spirits = SpiritManager.Instance.AllSpirits;
+                for (int i = 0; i < spirits.Count; i++)
+                {
+                    var a = spirits[i];
+                    if (a == null || a.State != SpiritState.Resident) continue;
+                    float d = (a.transform.position - from).sqrMagnitude;
+                    if (d < best) { best = d; target = a; }
+                }
+                if (target == null) { Print("No resident to name (try 'naming mausoleum')."); return; }
+            }
+
+            NamingCeremony.Begin(target, suggestion);
+            Print("Naming ceremony begins - close the console to watch.");
+        }
+
+        /// <summary>mood &lt;0-100|happy|neutral|sad&gt; [name|all]: sets resident Spirit.</summary>
+        private void CmdMood(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Print("Usage: mood <0-100|happy|neutral|sad> [name|all]");
+                return;
+            }
+
+            float value;
+            switch (args[1].ToLowerInvariant())
+            {
+                case "happy": value = 90f; break;
+                case "neutral": value = 50f; break;
+                case "sad": value = 20f; break; // low band; note: below runaway threshold for long = runaway
+                default:
+                    if (!float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+                    {
+                        Print("Usage: mood <0-100|happy|neutral|sad> [name|all]");
+                        return;
+                    }
+                    break;
+            }
+
+            var filter = new[] { "mood", args.Length >= 3 ? args[2] : "all" };
+            int count = ForEachResident(filter, agent => agent.Debug_SetSpirit(value));
+            if (count >= 0) Print("Set Spirit " + Mathf.RoundToInt(value) + " on " + count + " resident(s).");
+        }
+
+        private void CmdSilhouette(string[] args)
+        {
+            if (SpiritManager.Instance == null) { Print("SpiritManager not available."); return; }
+            if (args.Length < 2) { Print("Usage: silhouette <speciesId>"); return; }
+
+            var agent = SpiritManager.Instance.ForceSpawnSilhouette(args[1].ToLowerInvariant());
+            Print(agent != null
+                ? "Silhouette (" + args[1] + ") pinned 5 units away - walk toward it."
+                : "Unknown species: " + args[1]);
+        }
+
         private void CmdReady(string[] args)
         {
             int count = ForEachResident(args, agent =>
@@ -670,6 +932,25 @@ namespace AnimalFarm.Debugging
                 Print(count + " resident(s) made ascension-ready (home claims within ~2s).");
         }
 
+        private void CmdFestival(string[] args)
+        {
+            if (args.Length >= 2)
+            {
+                string a = args[1].ToLowerInvariant();
+                if (a == "now") Print(AnimalFarm.Competitions.CompetitionSchedule.Debug_Force(true));
+                else if (a == "clear") Print(AnimalFarm.Competitions.CompetitionSchedule.Debug_Force(false));
+                else if (a == "reset")
+                {
+                    var board = AnimalFarm.Competitions.CompetitionBoard.Instance;
+                    if (board != null) board.Debug_ResetEntry();
+                    Print("Today's festival entry forgotten (the board can be used again).");
+                }
+                else { Print("Usage: festival [now|clear|reset]"); return; }
+            }
+            Print(AnimalFarm.Competitions.CompetitionSchedule.Debug_Status());
+            Print("(bring a resident along with 'Come along', then use the Competition Board; one entry per day)");
+        }
+
         private void CmdCompete(string[] args)
         {
             var manager = AnimalFarm.Competitions.CompetitionManager.GetOrCreate();
@@ -677,11 +958,15 @@ namespace AnimalFarm.Debugging
             if (manager.EventRunning) { Print("An event is already running."); return; }
             if (SpiritManager.Instance == null) { Print("SpiritManager not available."); return; }
 
+            // Competitions are held (the board is read-only): this console path is
+            // the only way in. "compete race [0|1|2]" runs the sprint instead.
+            bool race = args.Length >= 2 && args[1].Equals("race", System.StringComparison.OrdinalIgnoreCase);
+            int argAt = race ? 2 : 1;
             int difficulty = 0;
-            if (args.Length >= 2
-                && (!int.TryParse(args[1], out difficulty) || difficulty < 0 || difficulty > 2))
+            if (args.Length > argAt
+                && (!int.TryParse(args[argAt], out difficulty) || difficulty < 0 || difficulty > 2))
             {
-                Print("Usage: compete [0|1|2]");
+                Print("Usage: compete [race] [0|1|2]");
                 return;
             }
 
@@ -698,12 +983,14 @@ namespace AnimalFarm.Debugging
             if (entrant == null) { Print("No resident spirits to enter."); return; }
 
             AnimalFarm.UI.CompetitionEntryUI.LastDifficulty = difficulty;
-            manager.StartBoulderTrial(entrant, difficulty);
+            if (race) manager.StartCrossing(entrant, difficulty);
+            else manager.StartBoulderTrial(entrant, difficulty);
 
             string name = !string.IsNullOrEmpty(entrant.GivenName)
                 ? entrant.GivenName
                 : (entrant.Species != null ? entrant.Species.displayName : "Spirit");
-            Print("Entered " + name + " in the Boulder Trial (difficulty " + difficulty + ").");
+            Print("Entered " + name + " in the " + (race ? "Sprint" : "Boulder Trial")
+                + " (difficulty " + difficulty + ").");
         }
 
         private void CmdWeave()
@@ -778,10 +1065,56 @@ namespace AnimalFarm.Debugging
             Print("Gentle Passage " + (value ? "ON (the Repo-man stays home)." : "OFF."));
         }
 
-        private void CmdRepo()
+        private void CmdRepo(string[] args)
         {
             if (RepoManManager.Instance == null) { Print("RepoManManager not available."); return; }
             if (SpiritManager.Instance == null) { Print("SpiritManager not available."); return; }
+
+            // Test helpers (muscle 07): runaway | skipwarn | price | bribes <n>
+            if (args.Length >= 2)
+            {
+                string sub = args[1].ToLowerInvariant();
+                var repo = RepoManManager.Instance;
+                if (sub == "price")
+                {
+                    Print("Bribes paid: " + repo.BribesPaid + ". Next bribe: " + repo.NextBribePrice + " obols.");
+                    return;
+                }
+                if (sub == "skipwarn")
+                {
+                    repo.Debug_MarkWarningSpent();
+                    Print("Warning visit marked spent: the next dispatch is a real one.");
+                    return;
+                }
+                if (sub == "bribes")
+                {
+                    if (args.Length < 3 || !int.TryParse(args[2], out int paid) || paid < 0)
+                    {
+                        Print("Usage: repo bribes <n >= 0>");
+                        return;
+                    }
+                    repo.Debug_SetBribesPaid(paid);
+                    Print("Bribes paid set to " + paid + ". Next bribe: " + repo.NextBribePrice + " obols.");
+                    return;
+                }
+                if (sub == "runaway")
+                {
+                    var all = SpiritManager.Instance.AllSpirits;
+                    for (int i = 0; i < all.Count; i++)
+                    {
+                        var a = all[i];
+                        if (a == null || a.State != SpiritState.Resident) continue;
+                        a.Debug_ForceRunaway();
+                        Print("Forced a runaway: " + (string.IsNullOrEmpty(a.GivenName) ? a.name : a.GivenName)
+                              + ". Now type 'repo'.");
+                        return;
+                    }
+                    Print("No residents to run away. (resident <id> [name] first.)");
+                    return;
+                }
+                Print("Usage: repo [runaway|skipwarn|price|bribes <n>]");
+                return;
+            }
 
             SpiritAgent runaway = null;
             var spirits = SpiritManager.Instance.AllSpirits;
@@ -862,6 +1195,90 @@ namespace AnimalFarm.Debugging
             {
                 Print("Unknown kind: " + args[1]);
                 Print("Kinds: " + string.Join(", ", System.Enum.GetNames(typeof(BleepKind))));
+            }
+        }
+
+        /// <summary>
+        /// Audio diagnostics: status, per-bus mute/solo, and the AudioGuard
+        /// request log (accepted + rejected). Ctrl+M is the direct panic kill.
+        /// </summary>
+        private void CmdAudio(string[] args)
+        {
+            string sub = args.Length >= 2 ? args[1].ToLowerInvariant() : "";
+
+            switch (sub)
+            {
+                case "":
+                case "status":
+                {
+                    var sb = new System.Text.StringBuilder("buses:");
+                    foreach (AudioBus b in System.Enum.GetValues(typeof(AudioBus)))
+                    {
+                        sb.Append(' ').Append(b.ToString().ToLowerInvariant()).Append('=');
+                        sb.Append(AudioGuard.IsMuted(b) ? "MUTED" : "on");
+                        if (AudioGuard.SoloBus.HasValue && AudioGuard.SoloBus.Value == b) sb.Append("(SOLO)");
+                    }
+                    Print(sb.ToString());
+                    if (AudioGuard.Killed) Print("PANIC KILL is ON (Ctrl+M to restore)");
+                    if (Bleeps.Muted) Print("Bleeps.Muted is ON");
+
+                    AudioGuard.CountsInLast(5f, out int acc, out int rej);
+                    Print("last 5 s: " + acc + " accepted, " + rej + " rejected");
+                    Print("limiter: last loud peak " + AudioGuard.LastLimiterPeak.ToString("0.00", CultureInfo.InvariantCulture)
+                        + (AudioGuard.LastLimiterPeakAt >= 0f
+                            ? " at t=" + AudioGuard.LastLimiterPeakAt.ToString("0.0", CultureInfo.InvariantCulture)
+                            : " (none yet)")
+                        + ", session max " + AudioLimiter.SessionMaxPeak.ToString("0.00", CultureInfo.InvariantCulture));
+                    Print("diag file: " + (AudioGuard.DiagPath ?? "(none)"));
+                    break;
+                }
+
+                case "mute":
+                {
+                    if (args.Length < 3) { Print("Usage: audio mute <music|ambience|sfx|voice|all>"); break; }
+                    if (args[2].ToLowerInvariant() == "all")
+                    {
+                        AudioGuard.MuteAll();
+                        Print("All buses muted.");
+                    }
+                    else if (System.Enum.TryParse(args[2], true, out AudioBus bus))
+                    {
+                        AudioGuard.SetMuted(bus, true);
+                        Print(bus + " muted.");
+                    }
+                    else Print("Unknown bus: " + args[2] + " (music|ambience|sfx|voice|all)");
+                    break;
+                }
+
+                case "unmute":
+                    AudioGuard.UnmuteAll();
+                    Print("All buses unmuted, solo and panic kill cleared.");
+                    break;
+
+                case "solo":
+                {
+                    if (args.Length < 3) { Print("Usage: audio solo <music|ambience|sfx|voice>"); break; }
+                    if (System.Enum.TryParse(args[2], true, out AudioBus bus))
+                    {
+                        AudioGuard.SetSolo(bus);
+                        Print(bus + " soloed ('audio unmute' clears).");
+                    }
+                    else Print("Unknown bus: " + args[2] + " (music|ambience|sfx|voice)");
+                    break;
+                }
+
+                case "log":
+                {
+                    var list = new List<AudioGuard.Entry>(30);
+                    AudioGuard.GetRecent(30, list);
+                    if (list.Count == 0) { Print("No audio requests recorded yet."); break; }
+                    for (int i = 0; i < list.Count; i++) Print(AudioGuard.FormatEntry(list[i]));
+                    break;
+                }
+
+                default:
+                    Print("Usage: audio [status|mute <bus|all>|unmute|solo <bus>|log]");
+                    break;
             }
         }
 
